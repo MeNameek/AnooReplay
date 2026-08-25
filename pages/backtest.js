@@ -76,32 +76,37 @@ export default function Backtest() {
       });
   }, [symbol]);
 
-  // Fetch bars for selected date
+  // Fetch bars for selected date + 30 days of context before it
   useEffect(() => {
-    if (!selectedDate) return;
+    if (!selectedDate || availableDates.length === 0) return;
     setLoading(true);
     setIsPlaying(false);
-    setCurrentIndex(0);
 
-    fetch(`/data/${symbol}/${selectedDate}.json`)
-      .then(r => {
-        if (!r.ok) throw new Error('No data');
-        return r.json();
-      })
-      .then(data => {
-        // Compact format: [[time, open, high, low, close, volume], ...]
-        const parsed = Array.isArray(data[0])
-          ? data.map(([time, open, high, low, close, volume]) => ({ time, open, high, low, close, volume }))
-          : data;
-        const aggregated = aggregateBars(parsed, timeframe);
-        setBars(aggregated);
-        setLoading(false);
-      })
-      .catch(() => {
-        setBars([]);
-        setLoading(false);
-      });
-  }, [selectedDate, symbol, timeframe, aggregateBars]);
+    const selIdx = availableDates.indexOf(selectedDate);
+    const startIdx = Math.max(0, selIdx - 30);
+    const contextDates = availableDates.slice(startIdx, selIdx + 1);
+
+    Promise.all(contextDates.map(d =>
+      fetch(`/data/${symbol}/${d}.json`).then(r => r.ok ? r.json() : []).catch(() => [])
+    )).then(results => {
+      const allParsed = [];
+      for (const raw of results) {
+        if (!raw || raw.length === 0) continue;
+        const parsed = Array.isArray(raw[0])
+          ? raw.map(([time, open, high, low, close, volume]) => ({ time, open, high, low, close, volume }))
+          : raw;
+        allParsed.push(...parsed);
+      }
+      allParsed.sort((a, b) => a.time - b.time);
+      const aggregated = aggregateBars(allParsed, timeframe);
+      setBars(aggregated);
+      setCurrentIndex(aggregated.length - 1);
+      setLoading(false);
+    }).catch(() => {
+      setBars([]);
+      setLoading(false);
+    });
+  }, [selectedDate, symbol, timeframe, aggregateBars, availableDates]);
 
   // Replay timer
   useEffect(() => {
