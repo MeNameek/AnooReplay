@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { createChart } from 'lightweight-charts';
+import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
 
 export default function Chart({ data, currentIndex, onCrosshairMove }) {
   const containerRef = useRef(null);
@@ -41,7 +41,7 @@ export default function Chart({ data, currentIndex, onCrosshairMove }) {
       },
     });
 
-    const candle = chart.addCandlestickSeries({
+    const candle = chart.addSeries(CandlestickSeries, {
       upColor: '#22c55e',
       downColor: '#ef4444',
       borderUpColor: '#22c55e',
@@ -50,7 +50,7 @@ export default function Chart({ data, currentIndex, onCrosshairMove }) {
       wickDownColor: '#ef4444',
     });
 
-    const volume = chart.addHistogramSeries({
+    const volume = chart.addSeries(HistogramSeries, {
       priceFormat: { type: 'volume' },
       priceScaleId: 'vol',
     });
