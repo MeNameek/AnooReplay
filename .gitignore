@@ -33,6 +33,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# generated data
-/public/data
-/data
+# large generated files (keep per-date chunks only)
+/public/data/NQ.json
+/public/data/ES.json
+/public/data/MNQ.json
+/public/data/MES.json
+/public/data/NQ_full.json

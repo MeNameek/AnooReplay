@@ -1,68 +1,47 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { createChart } from 'lightweight-charts';
 
-export default function Chart({ data, currentIndex, symbol, onCrosshairMove }) {
-  const chartRef = useRef(null);
+export default function Chart({ data, currentIndex, onCrosshairMove }) {
   const containerRef = useRef(null);
-  const seriesRef = useRef(null);
-  const volumeSeriesRef = useRef(null);
+  const chartRef = useRef(null);
+  const candleRef = useRef(null);
+  const volumeRef = useRef(null);
+  const prevIndexRef = useRef(-1);
 
+  // Create chart once
   useEffect(() => {
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { color: '#0a0a0b' },
-        textColor: '#94949e',
+        background: { color: '#09090b' },
+        textColor: '#52525b',
         fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 11,
+        fontSize: 10,
       },
       grid: {
-        vertLines: { color: '#1a1a1e' },
-        horzLines: { color: '#1a1a1e' },
+        vertLines: { color: '#18181b' },
+        horzLines: { color: '#18181b' },
       },
       crosshair: {
         mode: 0,
-        vertLine: {
-          color: '#333340',
-          width: 1,
-          style: 2,
-          labelBackgroundColor: '#222228',
-        },
-        horzLine: {
-          color: '#333340',
-          width: 1,
-          style: 2,
-          labelBackgroundColor: '#222228',
-        },
+        vertLine: { color: '#27272a', width: 1, style: 2, labelBackgroundColor: '#1f1f23' },
+        horzLine: { color: '#27272a', width: 1, style: 2, labelBackgroundColor: '#1f1f23' },
       },
       timeScale: {
-        borderColor: '#2a2a30',
+        borderColor: '#27272a',
         timeVisible: true,
         secondsVisible: false,
         barSpacing: 8,
         rightOffset: 5,
       },
       rightPriceScale: {
-        borderColor: '#2a2a30',
-        scaleMargins: {
-          top: 0.1,
-          bottom: 0.25,
-        },
-      },
-      handleScale: {
-        axisPressedMouseMove: true,
-        mouseWheel: true,
-        pinch: true,
-      },
-      handleScroll: {
-        mouseWheel: true,
-        pressedMouseMove: true,
-        horzTouchDrag: true,
+        borderColor: '#27272a',
+        scaleMargins: { top: 0.08, bottom: 0.22 },
       },
     });
 
-    const candlestickSeries = chart.addCandlestickSeries({
+    const candle = chart.addCandlestickSeries({
       upColor: '#22c55e',
       downColor: '#ef4444',
       borderUpColor: '#22c55e',
@@ -71,92 +50,69 @@ export default function Chart({ data, currentIndex, symbol, onCrosshairMove }) {
       wickDownColor: '#ef4444',
     });
 
-    const volumeSeries = chart.addHistogramSeries({
+    const volume = chart.addHistogramSeries({
       priceFormat: { type: 'volume' },
-      priceScaleId: '',
+      priceScaleId: 'vol',
     });
 
-    volumeSeries.priceScale().applyOptions({
-      scaleMargins: {
-        top: 0.8,
-        bottom: 0,
-      },
+    volume.priceScale().applyOptions({
+      scaleMargins: { top: 0.85, bottom: 0 },
     });
 
     chartRef.current = chart;
-    seriesRef.current = candlestickSeries;
-    volumeSeriesRef.current = volumeSeries;
+    candleRef.current = candle;
+    volumeRef.current = volume;
 
     if (onCrosshairMove) {
       chart.subscribeCrosshairMove((param) => {
         if (param.time) {
-          const data = param.seriesData.get(candlestickSeries);
-          if (data) {
-            onCrosshairMove({
-              time: param.time,
-              open: data.open,
-              high: data.high,
-              low: data.low,
-              close: data.close,
-            });
-          }
+          const d = param.seriesData.get(candle);
+          if (d) onCrosshairMove({ time: param.time, ...d });
         }
       });
     }
 
-    const handleResize = () => {
+    const ro = new ResizeObserver(() => {
       if (containerRef.current) {
         chart.applyOptions({
           width: containerRef.current.clientWidth,
           height: containerRef.current.clientHeight,
         });
       }
-    };
+    });
+    ro.observe(containerRef.current);
 
-    const observer = new ResizeObserver(handleResize);
-    observer.observe(containerRef.current);
-    handleResize();
+    return () => { ro.disconnect(); chart.remove(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return () => {
-      observer.disconnect();
-      chart.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
-      volumeSeriesRef.current = null;
-    };
-  }, [onCrosshairMove]);
-
+  // Update data when currentIndex changes
   useEffect(() => {
-    if (!data || !seriesRef.current || !volumeSeriesRef.current) return;
+    if (!data || !candleRef.current || !volumeRef.current) return;
+    if (currentIndex < 0 || currentIndex >= data.length) return;
 
-    const visibleData = data.slice(0, currentIndex + 1);
+    const visible = data.slice(0, currentIndex + 1);
 
-    const candleData = visibleData.map(bar => ({
-      time: bar.time,
-      open: bar.open,
-      high: bar.high,
-      low: bar.low,
-      close: bar.close,
-    }));
+    candleRef.current.setData(visible.map(b => ({
+      time: b.time,
+      open: b.open,
+      high: b.high,
+      low: b.low,
+      close: b.close,
+    })));
 
-    const volData = visibleData.map(bar => ({
-      time: bar.time,
-      value: bar.volume,
-      color: bar.close >= bar.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)',
-    }));
+    volumeRef.current.setData(visible.map(b => ({
+      time: b.time,
+      value: b.volume,
+      color: b.close >= b.open ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
+    })));
 
-    seriesRef.current.setData(candleData);
-    volumeSeriesRef.current.setData(volData);
-
-    if (chartRef.current && currentIndex >= data.length - 1) {
+    // Auto-scroll to latest bar
+    if (currentIndex >= data.length - 3 && chartRef.current) {
       chartRef.current.timeScale().scrollToRealTime();
     }
+
+    prevIndexRef.current = currentIndex;
   }, [data, currentIndex]);
 
-  return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height: '100%' }}
-    />
-  );
+  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 }

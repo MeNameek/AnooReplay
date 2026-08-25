@@ -12,13 +12,12 @@ export default function Backtest() {
   const [symbol, setSymbol] = useState('NQ');
   const [timeframe, setTimeframe] = useState(60);
   const [bars, setBars] = useState([]);
-  const [allBars, setAllBars] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(5);
-  const [selectedDate, setSelectedDate] = useState('2024-06-03');
+  const [selectedDate, setSelectedDate] = useState('');
   const [availableDates, setAvailableDates] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [crosshair, setCrosshair] = useState(null);
 
   // Trading
@@ -59,42 +58,50 @@ export default function Backtest() {
     return aggregated;
   }, []);
 
-  // Load dates when symbol changes
+  // Fetch available dates
   useEffect(() => {
     setLoading(true);
-    fetch(`/data/${symbol}.json`)
+    fetch(`/data/${symbol}/dates.json`)
       .then(r => r.json())
-      .then(data => {
-        setAllBars(data);
-        const dates = [...new Set(data.map(b => {
-          const d = new Date(b.time * 1000);
-          return d.toISOString().split('T')[0];
-        }))].sort();
+      .then(dates => {
         setAvailableDates(dates);
-        if (dates.length > 0 && !dates.includes(selectedDate)) {
-          setSelectedDate(dates[Math.floor(dates.length / 2)]);
+        if (dates.length > 0) {
+          const mid = dates[Math.floor(dates.length * 0.6)];
+          setSelectedDate(mid);
         }
         setLoading(false);
       })
       .catch(() => {
-        setAllBars([]);
-        setAvailableDates([]);
         setLoading(false);
       });
   }, [symbol]);
 
-  // Filter and aggregate when date/timeframe changes
+  // Fetch bars for selected date
   useEffect(() => {
-    if (allBars.length === 0) return;
-
-    const dayStart = new Date(selectedDate + 'T00:00:00Z').getTime() / 1000;
-    const dayEnd = new Date(selectedDate + 'T23:59:59Z').getTime() / 1000;
-    const dayBars = allBars.filter(b => b.time >= dayStart && b.time <= dayEnd);
-    const aggregated = aggregateBars(dayBars, timeframe);
-    setBars(aggregated);
-    setCurrentIndex(0);
+    if (!selectedDate) return;
+    setLoading(true);
     setIsPlaying(false);
-  }, [allBars, selectedDate, timeframe, aggregateBars]);
+    setCurrentIndex(0);
+
+    fetch(`/data/${symbol}/${selectedDate}.json`)
+      .then(r => {
+        if (!r.ok) throw new Error('No data');
+        return r.json();
+      })
+      .then(data => {
+        // Compact format: [[time, open, high, low, close, volume], ...]
+        const parsed = Array.isArray(data[0])
+          ? data.map(([time, open, high, low, close, volume]) => ({ time, open, high, low, close, volume }))
+          : data;
+        const aggregated = aggregateBars(parsed, timeframe);
+        setBars(aggregated);
+        setLoading(false);
+      })
+      .catch(() => {
+        setBars([]);
+        setLoading(false);
+      });
+  }, [selectedDate, symbol, timeframe, aggregateBars]);
 
   // Replay timer
   useEffect(() => {
@@ -117,47 +124,24 @@ export default function Backtest() {
   }, [isPlaying, speed, bars.length]);
 
   const handlePlayPause = () => {
-    if (currentIndex >= bars.length - 1) {
-      setCurrentIndex(0);
-    }
+    if (currentIndex >= bars.length - 1) setCurrentIndex(0);
     setIsPlaying(!isPlaying);
   };
+  const handleStepForward = () => { setIsPlaying(false); setCurrentIndex(p => Math.min(p + 1, bars.length - 1)); };
+  const handleStepBack = () => { setIsPlaying(false); setCurrentIndex(p => Math.max(p - 1, 0)); };
+  const handleSkipToStart = () => { setIsPlaying(false); setCurrentIndex(0); };
+  const handleSkipToEnd = () => { setIsPlaying(false); setCurrentIndex(bars.length - 1); };
+  const handleSeek = (i) => setCurrentIndex(i);
 
-  const handleStepForward = () => {
-    setIsPlaying(false);
-    setCurrentIndex(prev => Math.min(prev + 1, bars.length - 1));
-  };
-
-  const handleStepBack = () => {
-    setIsPlaying(false);
-    setCurrentIndex(prev => Math.max(prev - 1, 0));
-  };
-
-  const handleSkipToStart = () => {
-    setIsPlaying(false);
-    setCurrentIndex(0);
-  };
-
-  const handleSkipToEnd = () => {
-    setIsPlaying(false);
-    setCurrentIndex(bars.length - 1);
-  };
-
-  const handleSeek = (index) => {
-    setCurrentIndex(index);
-  };
-
-  const handleDateNav = (direction) => {
+  const handleDateNav = (dir) => {
     const idx = availableDates.indexOf(selectedDate);
-    const newIdx = idx + direction;
-    if (newIdx >= 0 && newIdx < availableDates.length) {
-      setSelectedDate(availableDates[newIdx]);
-    }
+    const newIdx = idx + dir;
+    if (newIdx >= 0 && newIdx < availableDates.length) setSelectedDate(availableDates[newIdx]);
   };
 
   const handleOpenPosition = (order) => {
     const spec = CONTRACTS[order.symbol];
-    const pos = {
+    setPositions(prev => [...prev, {
       symbol: order.symbol,
       side: order.side,
       qty: order.qty,
@@ -166,8 +150,7 @@ export default function Backtest() {
       time: bars[currentIndex]?.time || Date.now() / 1000,
       tickSize: spec.tickSize,
       tickValue: spec.tickValue,
-    };
-    setPositions(prev => [...prev, pos]);
+    }]);
   };
 
   const handleClosePosition = (index, currentPrice) => {
@@ -176,17 +159,12 @@ export default function Backtest() {
       ? (currentPrice - pos.entryPrice) * pos.qty * pos.tickValue / pos.tickSize
       : (pos.entryPrice - currentPrice) * pos.qty * pos.tickValue / pos.tickSize;
 
-    const trade = {
-      ...pos,
-      exitPrice: currentPrice,
-      pnl,
+    setTrades(prev => [...prev, {
+      ...pos, exitPrice: currentPrice, pnl,
       exitTime: bars[currentIndex]?.time || Date.now() / 1000,
-    };
-
-    setTrades(prev => [...prev, trade]);
+    }]);
     setPositions(prev => prev.filter((_, i) => i !== index));
     setAccount(prev => ({
-      ...prev,
       balance: prev.balance + pnl,
       equity: prev.balance + pnl,
       totalPnl: prev.totalPnl + pnl,
@@ -199,26 +177,29 @@ export default function Backtest() {
   return (
     <>
       <Head>
-        <title>AnooReplay — Backtest</title>
+        <title>AnooReplay</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
       <div className="app-layout">
         <div className="app-sidebar">
-          <Link href="/" className="sidebar-icon" title="Home">🏠</Link>
-          <Link href="/backtest" className="sidebar-icon active" title="Charts">📊</Link>
-          <Link href="/journal" className="sidebar-icon" title="Journal">📒</Link>
+          <Link href="/" className="sidebar-logo" title="Home">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </Link>
+          <div className="sidebar-divider" />
+          <Link href="/backtest" className="sidebar-icon active" title="Charts">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          </Link>
+          <Link href="/journal" className="sidebar-icon" title="Journal">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </Link>
         </div>
 
         <div className="app-main">
           <div className="top-bar">
             <div className="symbol-select">
               {Object.keys(CONTRACTS).map(s => (
-                <button
-                  key={s}
-                  className={`symbol-btn ${symbol === s ? 'active' : ''}`}
-                  onClick={() => setSymbol(s)}
-                >
+                <button key={s} className={`symbol-btn ${symbol === s ? 'active' : ''}`} onClick={() => setSymbol(s)}>
                   {s}
                 </button>
               ))}
@@ -226,22 +207,12 @@ export default function Backtest() {
 
             <div className="timeframe-select">
               {[
-                { label: '1m', seconds: 60 },
-                { label: '2m', seconds: 120 },
-                { label: '3m', seconds: 180 },
-                { label: '5m', seconds: 300 },
-                { label: '15m', seconds: 900 },
-                { label: '30m', seconds: 1800 },
-                { label: '1H', seconds: 3600 },
-                { label: '4H', seconds: 14400 },
-                { label: 'D', seconds: 86400 },
+                { l: '1m', s: 60 }, { l: '2m', s: 120 }, { l: '3m', s: 180 },
+                { l: '5m', s: 300 }, { l: '15m', s: 900 }, { l: '30m', s: 1800 },
+                { l: '1H', s: 3600 }, { l: '4H', s: 14400 }, { l: 'D', s: 86400 },
               ].map(tf => (
-                <button
-                  key={tf.seconds}
-                  className={`tf-btn ${timeframe === tf.seconds ? 'active' : ''}`}
-                  onClick={() => setTimeframe(tf.seconds)}
-                >
-                  {tf.label}
+                <button key={tf.s} className={`tf-btn ${timeframe === tf.s ? 'active' : ''}`} onClick={() => setTimeframe(tf.s)}>
+                  {tf.l}
                 </button>
               ))}
             </div>
@@ -249,7 +220,9 @@ export default function Backtest() {
             <div className="top-bar-spacer" />
 
             <div className="date-picker">
-              <button className="date-nav-btn" onClick={() => handleDateNav(-1)}>◀</button>
+              <button className="date-nav-btn" onClick={() => handleDateNav(-1)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
               <input
                 type="date"
                 value={selectedDate}
@@ -257,7 +230,9 @@ export default function Backtest() {
                 min={availableDates[0] || ''}
                 max={availableDates[availableDates.length - 1] || ''}
               />
-              <button className="date-nav-btn" onClick={() => handleDateNav(1)}>▶</button>
+              <button className="date-nav-btn" onClick={() => handleDateNav(1)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
             </div>
           </div>
 
@@ -265,43 +240,40 @@ export default function Backtest() {
             <div className="chart-container">
               {loading ? (
                 <div className="loading-overlay">
-                  <div style={{ textAlign: 'center' }}>
-                    <div className="loading-spinner" />
-                    <div className="loading-text">Loading {symbol} data...</div>
-                  </div>
+                  <div className="loading-spinner" />
                 </div>
               ) : bars.length === 0 ? (
                 <div className="empty-state">
-                  <div className="empty-state-icon">📉</div>
-                  <div>No data for {selectedDate}</div>
-                  <div style={{ fontSize: '11px' }}>Try another date</div>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                  <span>No data for {selectedDate || 'this date'}</span>
                 </div>
               ) : (
                 <>
                   <div className="chart-info">
-                    <div className="chart-symbol-label">{symbol} — {spec.name}</div>
+                    <div className="chart-symbol-label">
+                      {symbol} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{spec.name}</span>
+                    </div>
                     {currentBar && (
                       <>
                         <div className={`chart-price-label ${currentBar.close >= currentBar.open ? 'up' : 'down'}`}>
                           {currentBar.close.toFixed(2)}
                         </div>
                         <div className={`chart-change-label ${currentBar.close >= currentBar.open ? 'up' : 'down'}`}>
-                          {currentBar.close >= currentBar.open ? '▲' : '▼'}{' '}
-                          {Math.abs(currentBar.close - currentBar.open).toFixed(2)}{' '}
+                          {currentBar.close >= currentBar.open ? '+' : ''}
+                          {(currentBar.close - currentBar.open).toFixed(2)}
+                          {'  '}
                           ({((Math.abs(currentBar.close - currentBar.open) / currentBar.open) * 100).toFixed(2)}%)
                         </div>
                         <div className="chart-time-label">
-                          {new Date(currentBar.time * 1000).toLocaleString()}
+                          {new Date(currentBar.time * 1000).toLocaleString('en-US', {
+                            month: 'short', day: 'numeric', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/New_York'
+                          })} ET
                         </div>
                       </>
                     )}
                   </div>
-                  <Chart
-                    data={bars}
-                    currentIndex={currentIndex}
-                    symbol={symbol}
-                    onCrosshairMove={setCrosshair}
-                  />
+                  <Chart data={bars} currentIndex={currentIndex} symbol={symbol} onCrosshairMove={setCrosshair} />
                 </>
               )}
             </div>

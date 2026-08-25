@@ -7,60 +7,41 @@ export default function TradingPanel({ symbol, currentPrice, positions, onOpenPo
   const [limitPrice, setLimitPrice] = useState('');
   const [stopPrice, setStopPrice] = useState('');
 
-  const handleSubmit = () => {
-    const order = {
+  const handleSubmit = (orderSide) => {
+    onOpenPosition({
       symbol,
-      side,
+      side: orderSide,
       qty: parseInt(qty) || 1,
       type: orderType,
-      price: orderType === 'limit' ? parseFloat(limitPrice) : currentPrice,
-      stopPrice: orderType === 'stop' || orderType === 'stop-limit' ? parseFloat(stopPrice) : null,
-    };
-    onOpenPosition(order);
+      price: orderType === 'limit' ? parseFloat(limitPrice) || currentPrice : currentPrice,
+      stopPrice: orderType === 'stop' ? parseFloat(stopPrice) || currentPrice : null,
+    });
   };
-
-  const pnlColor = account.totalPnl >= 0 ? 'rgb(34,197,94)' : 'rgb(239,68,68)';
 
   return (
     <div className="trading-panel">
       <div className="panel-section">
-        <div className="panel-title">ACCOUNT</div>
+        <div className="panel-title">Account</div>
         <div className="account-info">
-          <div className="account-stat">
-            <div className="account-stat-label">BALANCE</div>
-            <div className="account-stat-value">
-              ${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </div>
+          <div>
+            <div className="account-stat-label">Balance</div>
+            <div className="account-stat-value">${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           </div>
-          <div className="account-stat">
-            <div className="account-stat-label">EQUITY</div>
-            <div className="account-stat-value">
-              ${account.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </div>
-          </div>
-          <div className="account-stat">
+          <div>
             <div className="account-stat-label">P&amp;L</div>
-            <div className="account-stat-value" style={{ color: pnlColor }}>
+            <div className="account-stat-value" style={{ color: account.totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
               {account.totalPnl >= 0 ? '+' : ''}{account.totalPnl.toFixed(2)}
             </div>
-          </div>
-          <div className="account-stat">
-            <div className="account-stat-label">POSITIONS</div>
-            <div className="account-stat-value">{positions.length}</div>
           </div>
         </div>
       </div>
 
       <div className="panel-section">
-        <div className="panel-title">NEW ORDER</div>
+        <div className="panel-title">Order</div>
         <div className="order-type-tabs">
-          {['market', 'limit', 'stop'].map(type => (
-            <button
-              key={type}
-              className={`order-type-tab ${orderType === type ? 'active' : ''}`}
-              onClick={() => setOrderType(type)}
-            >
-              {type.toUpperCase()}
+          {['market', 'limit', 'stop'].map(t => (
+            <button key={t} className={`order-type-tab ${orderType === t ? 'active' : ''}`} onClick={() => setOrderType(t)}>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
         </div>
@@ -68,51 +49,30 @@ export default function TradingPanel({ symbol, currentPrice, positions, onOpenPo
         {orderType === 'limit' && (
           <div className="order-input">
             <label>Limit Price</label>
-            <input
-              type="number"
-              step="0.25"
-              value={limitPrice}
-              onChange={(e) => setLimitPrice(e.target.value)}
-              placeholder={currentPrice ? currentPrice.toFixed(2) : ''}
-            />
+            <input type="number" step="0.25" value={limitPrice} onChange={e => setLimitPrice(e.target.value)} placeholder={currentPrice?.toFixed(2) || ''} />
           </div>
         )}
 
         {orderType === 'stop' && (
           <div className="order-input">
             <label>Stop Price</label>
-            <input
-              type="number"
-              step="0.25"
-              value={stopPrice}
-              onChange={(e) => setStopPrice(e.target.value)}
-              placeholder={currentPrice ? currentPrice.toFixed(2) : ''}
-            />
+            <input type="number" step="0.25" value={stopPrice} onChange={e => setStopPrice(e.target.value)} placeholder={currentPrice?.toFixed(2) || ''} />
           </div>
         )}
 
         <div className="order-input">
-          <label>Quantity (Contracts)</label>
-          <input
-            type="number"
-            min="1"
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-          />
+          <label>Qty</label>
+          <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} />
         </div>
 
         <div className="order-buttons">
-          <button className="buy-btn" onClick={() => { setSide('long'); handleSubmit(); }}>
-            BUY / LONG
-          </button>
-          <button className="sell-btn" onClick={() => { setSide('short'); handleSubmit(); }}>
-            SELL / SHORT
-          </button>
+          <button className="buy-btn" onClick={() => handleSubmit('long')}>Buy</button>
+          <button className="sell-btn" onClick={() => handleSubmit('short')}>Sell</button>
         </div>
       </div>
 
-      <div className="panel-section">
-        <div className="panel-title">POSITIONS ({positions.length})</div>
+      <div className="panel-section" style={{ flex: 1, overflow: 'auto' }}>
+        <div className="panel-title">Positions ({positions.length})</div>
         {positions.length === 0 ? (
           <div className="no-trades">No open positions</div>
         ) : (
@@ -122,48 +82,28 @@ export default function TradingPanel({ symbol, currentPrice, positions, onOpenPo
                 ? (currentPrice - pos.entryPrice) * pos.qty * pos.tickValue / pos.tickSize
                 : (pos.entryPrice - currentPrice) * pos.qty * pos.tickValue / pos.tickSize;
 
-              const pnlStyle = { color: pnl >= 0 ? 'rgb(34,197,94)' : 'rgb(239,68,68)' };
-              const sideClass = pos.side === 'long' ? 'long' : 'short';
-
               return (
                 <div key={i} className="position-item">
                   <div className="position-header">
-                    <span className={`position-side ${sideClass}`}>
-                      {pos.side.toUpperCase()} {pos.qty}x {pos.symbol}
+                    <span className={`position-side ${pos.side}`}>
+                      {pos.side === 'long' ? 'LONG' : 'SHORT'} {pos.qty}x
                     </span>
-                    <span className="position-pnl" style={pnlStyle}>
+                    <span className="position-pnl" style={{ color: pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
                       {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
                     </span>
                   </div>
                   <div className="position-details">
-                    <div className="position-detail">
-                      Entry <span>{pos.entryPrice.toFixed(2)}</span>
-                    </div>
-                    <div className="position-detail">
-                      Current <span>{currentPrice ? currentPrice.toFixed(2) : '--'}</span>
-                    </div>
-                    <div className="position-detail">
-                      Type <span>{pos.type}</span>
-                    </div>
-                    <div className="position-detail">
-                      Time <span>{new Date(pos.time * 1000).toLocaleTimeString()}</span>
-                    </div>
+                    <div className="position-detail">Entry <span>{pos.entryPrice.toFixed(2)}</span></div>
+                    <div className="position-detail">Now <span>{currentPrice?.toFixed(2) || '—'}</span></div>
                   </div>
                   <button className="close-position-btn" onClick={() => onClosePosition(i, currentPrice)}>
-                    CLOSE POSITION
+                    Close
                   </button>
                 </div>
               );
             })}
           </div>
         )}
-      </div>
-
-      <div className="panel-section">
-        <div className="panel-title">TODAY&apos;S TRADES</div>
-        <div className="no-trades" style={{ fontSize: '11px' }}>
-          Trades appear here after closing
-        </div>
       </div>
     </div>
   );
