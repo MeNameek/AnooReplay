@@ -89,7 +89,7 @@ export default function Journal() {
                   {trades.map((t, i) => (
                     <tr key={i}>
                       <td>{i + 1}</td>
-                      <td style={{ fontWeight: 600, color: 'var(--ink-2)' }}>{t.symbol}</td>
+                      <td style={{ fontWeight: 600, color: 'var(--ink-soft)' }}>{t.symbol}</td>
                       <td style={{ color: t.side === 'long' ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
                         {t.side.toUpperCase()}
                       </td>

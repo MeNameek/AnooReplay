@@ -1,11 +1,11 @@
 import { useState } from 'react';
 
 const PRESETS = {
-  dark: { label: 'Dark (Default)', bgColor: '#09090b', gridColor: '#18181b', textColor: '#52525b', upColor: '#22c55e', downColor: '#ef4444', wickUp: '#22c55e', wickDown: '#ef4444' },
-  light: { label: 'Light', bgColor: '#ffffff', gridColor: '#f0f0f0', textColor: '#666666', upColor: '#26a69a', downColor: '#ef5350', wickUp: '#26a69a', wickDown: '#ef5350' },
+  dark: { label: 'Dark', bgColor: '#000000', gridColor: '#141414', textColor: '#52525b', upColor: '#26a69a', downColor: '#ef5350', wickUp: '#26a69a', wickDown: '#ef5350' },
+  tv: { label: 'TradingView', bgColor: '#131722', gridColor: '#1e222d', textColor: '#787b86', upColor: '#26a69a', downColor: '#ef5350', wickUp: '#26a69a', wickDown: '#ef5350' },
   blue: { label: 'Blue Ocean', bgColor: '#0a1628', gridColor: '#132040', textColor: '#5a7da8', upColor: '#26a69a', downColor: '#ef5350', wickUp: '#26a69a', wickDown: '#ef5350' },
-  tradingview: { label: 'TradingView', bgColor: '#131722', gridColor: '#1e222d', textColor: '#787b86', upColor: '#26a69a', downColor: '#ef5350', wickUp: '#26a69a', wickDown: '#ef5350' },
-  green: { label: 'Matrix', bgColor: '#0a0f0a', gridColor: '#0d1a0d', textColor: '#2d5a2d', upColor: '#00ff41', downColor: '#008f11', wickUp: '#00ff41', wickDown: '#008f11' },
+  light: { label: 'Light', bgColor: '#ffffff', gridColor: '#f0f0f0', textColor: '#666666', upColor: '#26a69a', downColor: '#ef5350', wickUp: '#26a69a', wickDown: '#ef5350' },
+  matrix: { label: 'Matrix', bgColor: '#0a0f0a', gridColor: '#0d1a0d', textColor: '#2d5a2d', upColor: '#00ff41', downColor: '#008f11', wickUp: '#00ff41', wickDown: '#008f11' },
   purple: { label: 'Synthwave', bgColor: '#1a0a2e', gridColor: '#2d1b4e', textColor: '#8b5cf6', upColor: '#c084fc', downColor: '#f472b6', wickUp: '#c084fc', wickDown: '#f472b6' },
 };
 

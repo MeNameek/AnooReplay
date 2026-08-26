@@ -15,22 +15,66 @@ const TIMEFRAMES = [
   { l: '1H', s: 3600 }, { l: '4H', s: 14400 }, { l: 'D', s: 86400 },
 ];
 
-const DRAWING_TOOLS = [
-  { id: 'crosshair', label: 'Crosshair', icon: 'M4 4v16h16M4 12h16M12 4v16' },
-  { id: 'trend', label: 'Trend Line', icon: 'M4 20L20 4' },
-  { id: 'hline', label: 'Horizontal Line', icon: 'M2 12h20' },
-  { id: 'fib', label: 'Fibonacci', icon: 'M2 4h20M2 9.5h20M2 15h20M2 20h20' },
-  { id: 'rect', label: 'Rectangle', icon: 'M4 4h16v16H4z' },
-  { id: 'longpos', label: 'Long Position', icon: 'M12 20V4M8 8l4-4 4 4M8 16l4 4 4-4' },
-  { id: 'shortpos', label: 'Short Position', icon: 'M12 4v16M8 16l4 4 4-4M8 8l4-4 4 4' },
-  { id: 'measure', label: 'Measure', icon: 'M4 4l16 16M20 4L4 20' },
-  { id: 'text', label: 'Text', icon: 'M6 4h12M12 4v16M9 20h6' },
+const DRAWING_GROUPS = [
+  {
+    id: 'lines',
+    label: 'Lines',
+    icon: 'M4 20L20 4',
+    tools: [
+      { id: 'crosshair', label: 'Cursor', icon: 'M4 4v16h16M4 12h16M12 4v16' },
+      { id: 'trend', label: 'Trend Line', icon: 'M4 20L20 4' },
+      { id: 'hline', label: 'Horizontal Line', icon: 'M2 12h20' },
+    ],
+  },
+  {
+    id: 'fib',
+    label: 'Fibonacci',
+    icon: 'M2 4h20M2 9.5h20M2 15h20M2 20h20',
+    tools: [
+      { id: 'fib', label: 'Fib Retracement', icon: 'M2 4h20M2 9.5h20M2 15h20M2 20h20' },
+    ],
+  },
+  {
+    id: 'shapes',
+    label: 'Shapes',
+    icon: 'M4 4h16v16H4z',
+    tools: [
+      { id: 'rect', label: 'Rectangle', icon: 'M4 4h16v16H4z' },
+    ],
+  },
+  {
+    id: 'trade',
+    label: 'Trade',
+    icon: 'M12 20V4M8 8l4-4 4 4',
+    tools: [
+      { id: 'longpos', label: 'Long Position', icon: 'M12 20V4M8 8l4-4 4 4M8 16l4 4 4-4' },
+      { id: 'shortpos', label: 'Short Position', icon: 'M12 4v16M8 16l4 4 4-4M8 8l4-4 4 4' },
+      { id: 'measure', label: 'Measure', icon: 'M4 4l16 16M20 4L4 20' },
+    ],
+  },
+  {
+    id: 'text',
+    label: 'Text',
+    icon: 'M6 4h12M12 4v16M9 20h6',
+    tools: [
+      { id: 'text', label: 'Text', icon: 'M6 4h12M12 4v16M9 20h6' },
+    ],
+  },
 ];
 
 const DEFAULT_CHART_SETTINGS = {
-  bgColor: '#09090b', gridColor: '#18181b', textColor: '#52525b',
-  upColor: '#22c55e', downColor: '#ef4444', wickUp: '#22c55e', wickDown: '#ef4444',
+  bgColor: '#000000', gridColor: '#141414', textColor: '#52525b',
+  upColor: '#26a69a', downColor: '#ef5350', wickUp: '#26a69a', wickDown: '#ef5350',
 };
+
+function ToolButton({ icon, title, active, onClick, children }) {
+  return (
+    <button className={`tbtn ${active ? 'active' : ''}`} onClick={onClick} title={title}>
+      {icon && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={icon}/></svg>}
+      {children}
+    </button>
+  );
+}
 
 export default function Backtest() {
   const [symbol, setSymbol] = useState('NQ');
@@ -49,6 +93,11 @@ export default function Backtest() {
   const [showSettings, setShowSettings] = useState(false);
   const [chartSettings, setChartSettings] = useState(DEFAULT_CHART_SETTINGS);
   const [drawings, setDrawings] = useState([]);
+  const [openFlyout, setOpenFlyout] = useState(null);
+  const [showSymbolDropdown, setShowSymbolDropdown] = useState(false);
+  const [symbolFilter, setSymbolFilter] = useState('');
+
+  const flyoutRef = useRef(null);
 
   // Trading
   const [positions, setPositions] = useState([]);
@@ -56,6 +105,26 @@ export default function Backtest() {
   const [account, setAccount] = useState({ balance: 100000, equity: 100000, totalPnl: 0 });
 
   const intervalRef = useRef(null);
+
+  // Close flyout on outside click
+  useEffect(() => {
+    if (!openFlyout) return;
+    const handler = (e) => {
+      if (flyoutRef.current && !flyoutRef.current.contains(e.target)) setOpenFlyout(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openFlyout]);
+
+  // Close symbol dropdown on outside click
+  useEffect(() => {
+    if (!showSymbolDropdown) return;
+    const handler = (e) => {
+      if (!e.target.closest('.sym-trigger-wrap')) setShowSymbolDropdown(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showSymbolDropdown]);
 
   const aggregateBars = useCallback((rawBars, tfSeconds) => {
     if (tfSeconds === 60) return rawBars;
@@ -123,7 +192,7 @@ export default function Backtest() {
     }).catch(() => { setBars([]); setLoading(false); });
   }, [selectedDate, symbol, timeframe, aggregateBars, availableDates]);
 
-  // Replay timer — just advances currentIndex, doesn't touch bar visibility
+  // Replay timer
   useEffect(() => {
     if (isPlaying) {
       intervalRef.current = setInterval(() => {
@@ -138,7 +207,6 @@ export default function Backtest() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [isPlaying, speed, bars.length]);
 
-  // Controls
   const handlePlayPause = () => {
     if (currentIndex >= bars.length - 1) setCurrentIndex(0);
     setIsPlaying(p => !p);
@@ -182,6 +250,14 @@ export default function Backtest() {
 
   const currentBar = bars[currentIndex];
   const spec = CONTRACTS[symbol];
+  const tfLabel = TIMEFRAMES.find(t => t.s === timeframe)?.l || '1m';
+
+  const filteredSymbols = Object.keys(CONTRACTS).filter(s =>
+    s.toLowerCase().includes(symbolFilter.toLowerCase()) ||
+    (CONTRACTS[s].name || '').toLowerCase().includes(symbolFilter.toLowerCase())
+  );
+
+  const activeDrawingIcon = DRAWING_GROUPS.flatMap(g => g.tools).find(t => t.id === drawingTool);
 
   return (
     <>
@@ -195,57 +271,131 @@ export default function Backtest() {
       <div className="app-layout">
         {/* Left toolbar — drawing tools */}
         <div className="app-sidebar">
-          <Link href="/" className="sidebar-logo" title="Home">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <Link href="/" className="sidebar-icon" title="Home" style={{ marginBottom: 4 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           </Link>
           <div className="sidebar-divider" />
-          {DRAWING_TOOLS.map(t => (
-            <button key={t.id} className={`sidebar-icon ${drawingTool === t.id ? 'active' : ''}`}
-              onClick={() => setDrawingTool(t.id)} title={t.label}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d={t.icon} />
-              </svg>
-            </button>
-          ))}
+
+          {DRAWING_GROUPS.map(group => {
+            const isActive = group.tools.some(t => t.id === drawingTool);
+            const activeTool = group.tools.find(t => t.id === drawingTool);
+            return (
+              <div key={group.id} style={{ position: 'relative' }} ref={openFlyout === group.id ? flyoutRef : undefined}>
+                <button
+                  className={`sidebar-icon ${isActive ? 'active' : ''}`}
+                  title={group.label}
+                  onClick={() => setOpenFlyout(openFlyout === group.id ? null : group.id)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    {isActive && activeTool ? (
+                      <path d={activeTool.icon} />
+                    ) : (
+                      <path d={group.icon} />
+                    )}
+                  </svg>
+                </button>
+                {openFlyout === group.id && (
+                  <div className="drawing-flyout">
+                    {group.tools.map(tool => (
+                      <button
+                        key={tool.id}
+                        className={`drawing-flyout-item ${drawingTool === tool.id ? 'active' : ''}`}
+                        onClick={() => {
+                          setDrawingTool(drawingTool === tool.id ? 'crosshair' : tool.id);
+                          setOpenFlyout(null);
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d={tool.icon} />
+                        </svg>
+                        {tool.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
           <div className="sidebar-divider" />
           <button className="sidebar-icon" title="Clear drawings" onClick={() => setDrawings([])}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2M5 6l1 14h12l1-14M10 10v8M14 10v8"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2M5 6l1 14h12l1-14M10 10v8M14 10v8"/></svg>
           </button>
           <button className="sidebar-icon" title="Settings" onClick={() => setShowSettings(true)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
         </div>
 
         <div className="app-main">
-          {/* Top bar */}
-          <div className="top-bar">
-            <div className="symbol-select">
-              {Object.keys(CONTRACTS).map(s => (
-                <button key={s} className={`symbol-btn ${symbol === s ? 'active' : ''}`} onClick={() => setSymbol(s)}>
-                  {s}
-                </button>
-              ))}
+          {/* Top bar — NamiReplays style */}
+          <div className="topbar">
+            {/* Symbol selector */}
+            <div style={{ position: 'relative' }} className="sym-trigger-wrap">
+              <button className="sym-trigger" onClick={() => setShowSymbolDropdown(v => !v)}>
+                <span>{symbol}</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.5"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              {showSymbolDropdown && (
+                <div className="sym-dropdown">
+                  <input
+                    autoFocus placeholder="Search symbols..."
+                    value={symbolFilter}
+                    onChange={e => setSymbolFilter(e.target.value)}
+                  />
+                  {filteredSymbols.map(s => (
+                    <button key={s} className={`sym-dropdown-item ${s === symbol ? 'active' : ''}`} onClick={() => {
+                      setSymbol(s); setShowSymbolDropdown(false); setSymbolFilter('');
+                    }}>
+                      <span style={{ fontWeight: 600 }}>{s}</span>
+                      <span style={{ fontSize: 10, color: 'var(--ink-muted)' }}>{CONTRACTS[s]?.name || ''}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div className="timeframe-select">
-              {TIMEFRAMES.map(tf => (
-                <button key={tf.s} className={`tf-btn ${timeframe === tf.s ? 'active' : ''}`} onClick={() => setTimeframe(tf.s)}>
-                  {tf.l}
-                </button>
-              ))}
-            </div>
+            <div className="topbar-divider" />
 
-            <div className="top-bar-spacer" />
+            {/* Timeframes */}
+            {TIMEFRAMES.map(tf => (
+              <button key={tf.s} className={`tfbtn ${timeframe === tf.s ? 'active' : ''}`} onClick={() => setTimeframe(tf.s)}>
+                {tf.l}
+              </button>
+            ))}
 
+            <div className="topbar-divider" />
+
+            {/* Date picker */}
             <div className="date-picker">
               <button className="date-nav-btn" onClick={() => handleDateNav(-1)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
               <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} min={availableDates[0] || ''} max={availableDates[availableDates.length - 1] || ''} />
               <button className="date-nav-btn" onClick={() => handleDateNav(1)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
             </div>
+
+            <div className="topbar-spacer" />
+
+            {/* Toolbar buttons */}
+            <ToolButton
+              title="Show trade markers"
+              active={showMarks}
+              onClick={() => setShowMarks(p => !p)}
+              icon="M12 2v20M2 12h20"
+            />
+            <ToolButton
+              title="Toggle trading panel"
+              active={showPanels}
+              onClick={() => setShowPanels(p => !p)}
+              icon="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"
+            />
+            <ToolButton
+              title="Chart settings"
+              onClick={() => setShowSettings(true)}
+              icon="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+            />
           </div>
 
           {/* Content area */}
@@ -259,36 +409,15 @@ export default function Backtest() {
                   <span>No data for {selectedDate || 'this date'}</span>
                 </div>
               ) : (
-                <>
-                  <div className="chart-info">
-                    <div className="chart-symbol-label">{symbol} <span style={{ color: 'var(--ink-4)', fontWeight: 400 }}>{spec.name}</span></div>
-                    {currentBar && (
-                      <>
-                        <div className={`chart-price-label ${currentBar.close >= currentBar.open ? 'up' : 'down'}`}>{currentBar.close.toFixed(2)}</div>
-                        <div className={`chart-change-label ${currentBar.close >= currentBar.open ? 'up' : 'down'}`}>
-                          {currentBar.close >= currentBar.open ? '+' : ''}
-                          {(currentBar.close - currentBar.open).toFixed(2)}
-                          {'  '}
-                          ({((Math.abs(currentBar.close - currentBar.open) / currentBar.open) * 100).toFixed(2)}%)
-                        </div>
-                        <div className="chart-time-label">
-                          {new Date(currentBar.time * 1000).toLocaleString('en-US', {
-                            month: 'short', day: 'numeric', year: 'numeric',
-                            hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/New_York'
-                          })} ET
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <Chart
-                    data={bars} currentIndex={currentIndex} symbol={symbol}
-                    onCrosshairMove={setCrosshair} positions={positions} trades={trades}
-                    showMarks={showMarks} chartSettings={chartSettings}
-                    activeDrawing={drawingTool === 'crosshair' ? null : drawingTool}
-                    drawings={drawings}
-                    onDrawingAdd={(d) => setDrawings(prev => [...prev, d])}
-                  />
-                </>
+                <Chart
+                  data={bars} currentIndex={currentIndex}
+                  symbol={symbol} timeframe={timeframe}
+                  onCrosshairMove={setCrosshair} positions={positions} trades={trades}
+                  showMarks={showMarks} chartSettings={chartSettings}
+                  activeDrawing={drawingTool === 'crosshair' ? null : drawingTool}
+                  drawings={drawings}
+                  onDrawingAdd={(d) => setDrawings(prev => [...prev, d])}
+                />
               )}
             </div>
 

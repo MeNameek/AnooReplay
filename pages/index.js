@@ -9,7 +9,7 @@ export default function Home() {
       </div>
 
       <div className="land-hero">
-        <h1>Practice trading.<br/>Risk nothing.</h1>
+        <h1>Replay the market.<br/>Test your edge.</h1>
         <p>
           Bar-by-bar replay for NQ, ES, MNQ, and MES futures.
           Step through years of real 1-minute data. Paper trade.
@@ -56,7 +56,7 @@ export default function Home() {
 
       <div className="land-footer">
         <span>Simulated futures replay</span>
-        <span>·</span>
+        <span>&middot;</span>
         <span>Not investment advice</span>
       </div>
     </div>

@@ -2,33 +2,67 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, CandlestickSeries, HistogramSeries, createSeriesMarkers } from 'lightweight-charts';
 
 const DEFAULT_SETTINGS = {
-  bgColor: '#09090b',
-  gridColor: '#18181b',
+  bgColor: '#000000',
+  gridColor: '#141414',
   textColor: '#52525b',
-  upColor: '#22c55e',
-  downColor: '#ef4444',
-  wickUp: '#22c55e',
-  wickDown: '#ef4444',
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  wickUp: '#26a69a',
+  wickDown: '#ef5350',
 };
+
+function formatCountdown(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function formatDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}  ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} ET`;
+}
 
 export default function Chart({
   data, currentIndex, onCrosshairMove,
   positions = [], trades = [], showMarks = true,
   chartSettings, activeDrawing, drawings = [], onDrawingAdd,
+  symbol, timeframe,
 }) {
   const containerRef = useRef(null);
-  const canvasRef = useRef(null);
   const chartRef = useRef(null);
   const candleRef = useRef(null);
   const volumeRef = useRef(null);
   const cursorLineRef = useRef(null);
   const markersApiRef = useRef(null);
   const priceLinesRef = useRef([]);
-  const drawingLinesRef = useRef([]);
+  const drawingLinesRef = useRef(null);
+  const drawingLinesArray = useRef([]);
   const [drawingState, setDrawingState] = useState(null);
   const [ctxMenu, setCtxMenu] = useState(null);
+  const [countdown, setCountdown] = useState('');
+  const [crosshairData, setCrosshairData] = useState(null);
 
   const settings = { ...DEFAULT_SETTINGS, ...chartSettings };
+
+  // Countdown timer
+  useEffect(() => {
+    const intervalMs = (timeframe || 60) * 1000;
+    if (intervalMs >= 86400000) { setCountdown(''); return; }
+    const tick = () => {
+      const now = Date.now();
+      const bucket = Math.floor(now / intervalMs) * intervalMs;
+      const remaining = Math.max(0, (bucket + intervalMs - now) / 1000);
+      setCountdown(formatCountdown(remaining));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [timeframe]);
 
   // Create chart once
   useEffect(() => {
@@ -38,28 +72,45 @@ export default function Chart({
       layout: {
         background: { color: settings.bgColor },
         textColor: settings.textColor,
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: "'SF Mono', 'Fira Code', ui-monospace, Menlo, Monaco, Consolas, monospace",
         fontSize: 10,
       },
-      grid: { vertLines: { color: settings.gridColor }, horzLines: { color: settings.gridColor } },
+      grid: {
+        vertLines: { color: settings.gridColor, style: 1 },
+        horzLines: { color: settings.gridColor, style: 1 },
+      },
       crosshair: {
         mode: 0,
-        vertLine: { color: '#27272a', width: 1, style: 2, labelBackgroundColor: '#1f1f23' },
-        horzLine: { color: '#27272a', width: 1, style: 2, labelBackgroundColor: '#1f1f23' },
+        vertLine: { color: 'rgba(255,255,255,0.1)', width: 1, style: 2, labelBackgroundColor: '#1c1c1c' },
+        horzLine: { color: 'rgba(255,255,255,0.1)', width: 1, style: 2, labelBackgroundColor: '#1c1c1c' },
       },
-      timeScale: { borderColor: '#27272a', timeVisible: true, secondsVisible: false, barSpacing: 8, rightOffset: 5 },
-      rightPriceScale: { borderColor: '#27272a', scaleMargins: { top: 0.08, bottom: 0.22 } },
-      handleScroll: true, handleScale: true,
+      timeScale: {
+        borderColor: '#27272a',
+        timeVisible: true,
+        secondsVisible: false,
+        barSpacing: 8,
+        rightOffset: 5,
+      },
+      rightPriceScale: {
+        borderColor: '#27272a',
+        scaleMargins: { top: 0.08, bottom: 0.22 },
+      },
+      handleScroll: true,
+      handleScale: true,
     });
 
     const candle = chart.addSeries(CandlestickSeries, {
-      upColor: settings.upColor, downColor: settings.downColor,
-      borderUpColor: settings.upColor, borderDownColor: settings.downColor,
-      wickUpColor: settings.wickUp, wickDownColor: settings.wickDown,
+      upColor: settings.upColor,
+      downColor: settings.downColor,
+      borderUpColor: settings.upColor,
+      borderDownColor: settings.downColor,
+      wickUpColor: settings.wickUp,
+      wickDownColor: settings.wickDown,
     });
 
     const volume = chart.addSeries(HistogramSeries, {
-      priceFormat: { type: 'volume' }, priceScaleId: 'vol',
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'vol',
     });
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
 
@@ -73,7 +124,10 @@ export default function Chart({
       chart.subscribeCrosshairMove((param) => {
         if (param.time) {
           const d = param.seriesData.get(candle);
-          if (d) onCrosshairMove({ time: param.time, ...d });
+          if (d) {
+            onCrosshairMove({ time: param.time, ...d });
+            setCrosshairData({ time: param.time, ...d });
+          }
         }
       });
     }
@@ -114,12 +168,10 @@ export default function Chart({
     volumeRef.current.setData(data.map(b => ({
       time: b.time,
       value: b.volume,
-      color: b.close >= b.open ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
+      color: b.close >= b.open ? 'rgba(38,166,154,0.2)' : 'rgba(239,83,80,0.2)',
     })));
 
-    // Scroll to current position
     if (currentIndex >= 0 && currentIndex < data.length && chartRef.current) {
-      const time = data[currentIndex].time;
       chartRef.current.timeScale().scrollToPosition(10, false);
     }
   }, [data]);
@@ -129,7 +181,6 @@ export default function Chart({
     if (!candleRef.current || !data || data.length === 0) return;
     if (currentIndex < 0 || currentIndex >= data.length) return;
 
-    // Remove old cursor
     if (cursorLineRef.current) {
       try { candleRef.current.removePriceLine(cursorLineRef.current); } catch (e) {}
       cursorLineRef.current = null;
@@ -138,19 +189,19 @@ export default function Chart({
     const bar = data[currentIndex];
     cursorLineRef.current = candleRef.current.createPriceLine({
       price: bar.close,
-      color: '#3b82f6',
+      color: '#2962ff',
       lineWidth: 1,
       lineStyle: 0,
       axisLabelVisible: true,
       title: '',
+      axisLabelColor: '#2962ff',
+      axisLabelTextColor: '#ffffff',
     });
 
-    // Follow with visible time
     if (chartRef.current) {
       const ts = chartRef.current.timeScale();
       const visibleRange = ts.getVisibleLogicalRange();
       if (visibleRange) {
-        const mid = (visibleRange.from + visibleRange.to) / 2;
         if (currentIndex > visibleRange.to - 10 || currentIndex < visibleRange.from + 10) {
           ts.scrollToPosition(Math.floor(data.length - currentIndex - 20), false);
         }
@@ -169,15 +220,15 @@ export default function Chart({
       for (const t of trades) {
         markers.push({
           time: t.time, position: t.side === 'long' ? 'belowBar' : 'aboveBar',
-          color: t.side === 'long' ? '#22c55e' : '#ef4444',
+          color: t.side === 'long' ? '#26a69a' : '#ef5350',
           shape: t.side === 'long' ? 'arrowUp' : 'arrowDown',
           text: `${t.side === 'long' ? 'B' : 'S'} ${t.qty}`, size: 1,
         });
         if (t.exitTime) {
           markers.push({
             time: t.exitTime, position: t.side === 'long' ? 'aboveBar' : 'belowBar',
-            color: t.pnl >= 0 ? '#22c55e' : '#ef4444',
-            shape: t.side === 'long' ? 'arrowDown' : 'arrowUp',
+            color: t.pnl >= 0 ? '#26a69a' : '#ef5350',
+            shape: 'circle',
             text: `${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(0)}`, size: 1,
           });
         }
@@ -185,7 +236,7 @@ export default function Chart({
       for (const p of positions) {
         markers.push({
           time: p.time, position: p.side === 'long' ? 'belowBar' : 'aboveBar',
-          color: p.side === 'long' ? '#22c55e' : '#ef4444',
+          color: p.side === 'long' ? '#26a69a' : '#ef5350',
           shape: p.side === 'long' ? 'arrowUp' : 'arrowDown',
           text: `${p.side === 'long' ? 'B' : 'S'} ${p.qty}`, size: 1,
         });
@@ -204,43 +255,51 @@ export default function Chart({
     priceLinesRef.current = [];
     for (const p of positions) {
       const line = candleRef.current.createPriceLine({
-        price: p.entryPrice, color: p.side === 'long' ? '#22c55e' : '#ef4444',
-        lineWidth: 1, lineStyle: 2, axisLabelVisible: true,
+        price: p.entryPrice,
+        color: p.side === 'long' ? 'rgba(38,166,154,0.6)' : 'rgba(239,83,80,0.6)',
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
         title: `${p.side === 'long' ? 'LONG' : 'SHORT'} ${p.qty} @ ${p.entryPrice.toFixed(2)}`,
+        axisLabelColor: p.side === 'long' ? '#26a69a' : '#ef5350',
+        axisLabelTextColor: '#ffffff',
       });
       priceLinesRef.current.push(line);
     }
   }, [positions]);
 
-  // User drawings (price lines for hlines, etc)
+  // User drawings
   useEffect(() => {
     if (!candleRef.current) return;
-    for (const pl of drawingLinesRef.current) {
+    for (const pl of drawingLinesArray.current) {
       try { candleRef.current.removePriceLine(pl); } catch (e) {}
     }
-    drawingLinesRef.current = [];
+    drawingLinesArray.current = [];
     for (const d of drawings) {
       if (d.type === 'hline') {
         const line = candleRef.current.createPriceLine({
-          price: d.price, color: d.color || '#f59e0b', lineWidth: 1, lineStyle: 0,
+          price: d.price, color: d.color || '#2962ff', lineWidth: 1, lineStyle: 0,
           axisLabelVisible: true, title: d.label || '',
+          axisLabelColor: d.color || '#2962ff',
+          axisLabelTextColor: '#ffffff',
         });
-        drawingLinesRef.current.push(line);
+        drawingLinesArray.current.push(line);
       } else if (d.type === 'longpos' || d.type === 'shortpos') {
         const isLong = d.type === 'longpos';
         const tpLine = candleRef.current.createPriceLine({
-          price: d.entry + (isLong ? 1 : -1) * d.tpTicks * 0.25, color: '#22c55e', lineWidth: 1, lineStyle: 2,
-          axisLabelVisible: true, title: 'TP',
+          price: d.entry + (isLong ? 1 : -1) * d.tpTicks * 0.25, color: '#26a69a', lineWidth: 1, lineStyle: 2,
+          axisLabelVisible: true, title: 'TP', axisLabelColor: '#26a69a', axisLabelTextColor: '#ffffff',
         });
         const slLine = candleRef.current.createPriceLine({
-          price: d.entry + (isLong ? -1 : 1) * d.slTicks * 0.25, color: '#ef4444', lineWidth: 1, lineStyle: 2,
-          axisLabelVisible: true, title: 'SL',
+          price: d.entry + (isLong ? -1 : 1) * d.slTicks * 0.25, color: '#ef5350', lineWidth: 1, lineStyle: 2,
+          axisLabelVisible: true, title: 'SL', axisLabelColor: '#ef5350', axisLabelTextColor: '#ffffff',
         });
         const entryLine = candleRef.current.createPriceLine({
-          price: d.entry, color: isLong ? '#22c55e' : '#ef4444', lineWidth: 2, lineStyle: 0,
+          price: d.entry, color: isLong ? '#26a69a' : '#ef5350', lineWidth: 2, lineStyle: 0,
           axisLabelVisible: true, title: isLong ? 'LONG' : 'SHORT',
+          axisLabelColor: isLong ? '#26a69a' : '#ef5350', axisLabelTextColor: '#ffffff',
         });
-        drawingLinesRef.current.push(tpLine, slLine, entryLine);
+        drawingLinesArray.current.push(tpLine, slLine, entryLine);
       } else if (d.type === 'fib') {
         const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
         const range = d.high - d.low;
@@ -249,36 +308,34 @@ export default function Chart({
           const line = candleRef.current.createPriceLine({
             price, color: '#a78bfa', lineWidth: 1, lineStyle: 2,
             axisLabelVisible: true, title: `${(l * 100).toFixed(1)}%`,
+            axisLabelColor: '#a78bfa', axisLabelTextColor: '#ffffff',
           });
-          drawingLinesRef.current.push(line);
+          drawingLinesArray.current.push(line);
         }
       } else if (d.type === 'rect') {
         const topLine = candleRef.current.createPriceLine({
-          price: d.top, color: '#f59e0b', lineWidth: 1, lineStyle: 0, axisLabelVisible: false, title: '',
+          price: d.top, color: '#2962ff', lineWidth: 1, lineStyle: 0, axisLabelVisible: false, title: '',
         });
         const botLine = candleRef.current.createPriceLine({
-          price: d.bottom, color: '#f59e0b', lineWidth: 1, lineStyle: 0, axisLabelVisible: false, title: '',
+          price: d.bottom, color: '#2962ff', lineWidth: 1, lineStyle: 0, axisLabelVisible: false, title: '',
         });
-        drawingLinesRef.current.push(topLine, botLine);
+        drawingLinesArray.current.push(topLine, botLine);
       }
     }
   }, [drawings]);
 
   // Drawing tool — click to place
   const handleClick = useCallback((e) => {
-    if (!activeDrawing || !chartRef.current || !candleRef.current || !data) return;
+    if (!activeDrawing || activeDrawing === 'crosshair' || !chartRef.current || !candleRef.current || !data) return;
     if (currentIndex < 0 || currentIndex >= data.length) return;
 
     const rect = containerRef.current.getBoundingClientRect();
-    const chart = chartRef.current;
     const series = candleRef.current;
-
-    // Get price at click
     const y = e.clientY - rect.top;
     const price = series.coordinateToPrice(y);
 
     if (activeDrawing === 'hline') {
-      onDrawingAdd({ type: 'hline', price, color: '#f59e0b', label: '' });
+      onDrawingAdd({ type: 'hline', price, color: '#2962ff', label: '' });
     } else if (activeDrawing === 'longpos' || activeDrawing === 'shortpos') {
       onDrawingAdd({ type: activeDrawing, entry: price, tpTicks: 100, slTicks: 75 });
     } else if (activeDrawing === 'fib') {
@@ -293,6 +350,13 @@ export default function Chart({
         setDrawingState({ type: 'rect', top: price });
       } else {
         onDrawingAdd({ type: 'rect', top: Math.max(drawingState.top, price), bottom: Math.min(drawingState.top, price) });
+        setDrawingState(null);
+      }
+    } else if (activeDrawing === 'trend') {
+      if (!drawingState) {
+        setDrawingState({ type: 'trend', price, time: data[currentIndex]?.time });
+      } else {
+        onDrawingAdd({ type: 'hline', price, color: '#a78bfa', label: 'Trend' });
         setDrawingState(null);
       }
     }
@@ -331,20 +395,67 @@ export default function Chart({
     setCtxMenu(null);
   };
 
+  const currentBar = data && currentIndex >= 0 && currentIndex < data.length ? data[currentIndex] : null;
+  const isUp = currentBar && currentBar.close >= currentBar.open;
+  const change = currentBar ? currentBar.close - currentBar.open : 0;
+  const changePct = currentBar ? (Math.abs(change) / currentBar.open) * 100 : 0;
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
         ref={containerRef}
-        style={{ width: '100%', height: '100%', cursor: activeDrawing ? 'crosshair' : 'default' }}
+        style={{ width: '100%', height: '100%', cursor: activeDrawing && activeDrawing !== 'crosshair' ? 'crosshair' : 'default' }}
         onContextMenu={handleContextMenu}
         onClick={handleClick}
       />
+
+      {/* OHLCV Legend */}
+      {currentBar && (
+        <div className="chart-legend">
+          <div>
+            <span className="chart-legend-symbol">{symbol}</span>
+            <span className="chart-legend-tf">{timeframe ? (timeframe >= 3600 ? `${timeframe / 3600}H` : timeframe >= 86400 ? 'D' : `${timeframe / 60}m`) : '1m'}</span>
+          </div>
+          <div className="chart-ohlcv">
+            <span className="lbl">O</span>
+            <span className={`val ${isUp ? 'up' : 'down'}`}>{(crosshairData || currentBar).open?.toFixed(2)}</span>
+            <span className="lbl">H</span>
+            <span className={`val ${isUp ? 'up' : 'down'}`}>{(crosshairData || currentBar).high?.toFixed(2)}</span>
+            <span className="lbl">L</span>
+            <span className={`val ${isUp ? 'up' : 'down'}`}>{(crosshairData || currentBar).low?.toFixed(2)}</span>
+            <span className="lbl">C</span>
+            <span className={`val ${isUp ? 'up' : 'down'}`}>{(crosshairData || currentBar).close?.toFixed(2)}</span>
+            <span className={`val ${change >= 0 ? 'up' : 'down'}`}>
+              {change >= 0 ? '+' : ''}{changePct.toFixed(2)}%
+            </span>
+          </div>
+          {countdown && (
+            <div className="chart-countdown">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.5">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              {countdown}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Context Menu */}
       {ctxMenu && (
-        <div className="chart-ctx-menu" style={{ left: Math.min(ctxMenu.x, (containerRef.current?.clientWidth || 300) - 200), top: Math.min(ctxMenu.y, (containerRef.current?.clientHeight || 200) - 120) }}>
+        <div className="chart-ctx-menu" style={{ left: Math.min(ctxMenu.x - (containerRef.current?.getBoundingClientRect()?.left || 0), (containerRef.current?.clientWidth || 300) - 200), top: Math.min(ctxMenu.y - (containerRef.current?.getBoundingClientRect()?.top || 0), (containerRef.current?.clientHeight || 200) - 120) }}>
           <button onClick={(e) => { e.stopPropagation(); menuAction('reset'); }}>Reset chart view</button>
           <button onClick={(e) => { e.stopPropagation(); menuAction('copyPrice'); }}>
             Copy price {ctxMenu.price != null ? ctxMenu.price.toFixed(2) : ''}
           </button>
+        </div>
+      )}
+
+      {/* Drawing state indicator */}
+      {drawingState && (
+        <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 20 }}>
+          <div className="replay-badge">
+            <span>Click to set second point</span>
+          </div>
         </div>
       )}
     </div>
