@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -17,9 +18,7 @@ const TIMEFRAMES = [
 
 const DRAWING_GROUPS = [
   {
-    id: 'lines',
-    label: 'Lines',
-    icon: 'M4 20L20 4',
+    id: 'lines', label: 'Lines', icon: 'M4 20L20 4',
     tools: [
       { id: 'crosshair', label: 'Cursor', icon: 'M4 4v16h16M4 12h16M12 4v16' },
       { id: 'trend', label: 'Trend Line', icon: 'M4 20L20 4' },
@@ -27,25 +26,19 @@ const DRAWING_GROUPS = [
     ],
   },
   {
-    id: 'fib',
-    label: 'Fibonacci',
-    icon: 'M2 4h20M2 9.5h20M2 15h20M2 20h20',
+    id: 'fib', label: 'Fibonacci', icon: 'M2 4h20M2 9.5h20M2 15h20M2 20h20',
     tools: [
       { id: 'fib', label: 'Fib Retracement', icon: 'M2 4h20M2 9.5h20M2 15h20M2 20h20' },
     ],
   },
   {
-    id: 'shapes',
-    label: 'Shapes',
-    icon: 'M4 4h16v16H4z',
+    id: 'shapes', label: 'Shapes', icon: 'M4 4h16v16H4z',
     tools: [
       { id: 'rect', label: 'Rectangle', icon: 'M4 4h16v16H4z' },
     ],
   },
   {
-    id: 'trade',
-    label: 'Trade',
-    icon: 'M12 20V4M8 8l4-4 4 4',
+    id: 'trade', label: 'Trade', icon: 'M12 20V4M8 8l4-4 4 4',
     tools: [
       { id: 'longpos', label: 'Long Position', icon: 'M12 20V4M8 8l4-4 4 4M8 16l4 4 4-4' },
       { id: 'shortpos', label: 'Short Position', icon: 'M12 4v16M8 16l4 4 4-4M8 8l4-4 4 4' },
@@ -53,9 +46,7 @@ const DRAWING_GROUPS = [
     ],
   },
   {
-    id: 'text',
-    label: 'Text',
-    icon: 'M6 4h12M12 4v16M9 20h6',
+    id: 'text', label: 'Text', icon: 'M6 4h12M12 4v16M9 20h6',
     tools: [
       { id: 'text', label: 'Text', icon: 'M6 4h12M12 4v16M9 20h6' },
     ],
@@ -77,6 +68,9 @@ function ToolButton({ icon, title, active, onClick, children }) {
 }
 
 export default function Backtest() {
+  const router = useRouter();
+  const sessionId = router.query.session || null;
+
   const [symbol, setSymbol] = useState('NQ');
   const [timeframe, setTimeframe] = useState(60);
   const [bars, setBars] = useState([]);
@@ -98,15 +92,53 @@ export default function Backtest() {
   const [symbolFilter, setSymbolFilter] = useState('');
 
   const flyoutRef = useRef(null);
-
-  // Trading
   const [positions, setPositions] = useState([]);
   const [trades, setTrades] = useState([]);
   const [account, setAccount] = useState({ balance: 100000, equity: 100000, totalPnl: 0 });
+  const [sessionName, setSessionName] = useState('');
 
   const intervalRef = useRef(null);
+  const saveTimeoutRef = useRef(null);
 
-  // Close flyout on outside click
+  useEffect(() => {
+    if (!router.isReady || !sessionId) return;
+    try {
+      const raw = localStorage.getItem('anoreplay:session:' + sessionId);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s.symbol) setSymbol(s.symbol);
+        if (s.balance) setAccount({ balance: s.balance, equity: s.balance, totalPnl: 0 });
+        if (s.name) setSessionName(s.name);
+        if (s.startDate && s.endDate) {
+          setSelectedDate(s.startDate);
+        }
+        if (s.trades) setTrades(s.trades);
+        if (s.positions) setPositions(s.positions);
+        if (s.drawings) setDrawings(s.drawings);
+      }
+    } catch (e) {}
+  }, [router.isReady, sessionId]);
+
+  const saveSession = useCallback((updates) => {
+    if (!sessionId) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      try {
+        const raw = localStorage.getItem('anoreplay:session:' + sessionId);
+        if (raw) {
+          const s = JSON.parse(raw);
+          Object.assign(s, updates);
+          localStorage.setItem('anoreplay:session:' + sessionId, JSON.stringify(s));
+        }
+      } catch (e) {}
+    }, 500);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    saveSession({ trades, positions, drawings, currentIndex, symbol, timeframe });
+  }, [trades, positions, drawings, currentIndex, symbol, timeframe, sessionId, saveSession]);
+
   useEffect(() => {
     if (!openFlyout) return;
     const handler = (e) => {
@@ -116,7 +148,6 @@ export default function Backtest() {
     return () => document.removeEventListener('mousedown', handler);
   }, [openFlyout]);
 
-  // Close symbol dropdown on outside click
   useEffect(() => {
     if (!showSymbolDropdown) return;
     const handler = (e) => {
@@ -146,14 +177,13 @@ export default function Backtest() {
     return aggregated;
   }, []);
 
-  // Fetch available dates
   useEffect(() => {
     setLoading(true);
     fetch(`/data/${symbol}/dates.json`)
       .then(r => r.json())
       .then(dates => {
         setAvailableDates(dates);
-        if (dates.length > 0) {
+        if (dates.length > 0 && !selectedDate) {
           const mid = dates[Math.floor(dates.length * 0.6)];
           setSelectedDate(mid);
         }
@@ -162,7 +192,6 @@ export default function Backtest() {
       .catch(() => setLoading(false));
   }, [symbol]);
 
-  // Fetch bars for selected date + 30 days context
   useEffect(() => {
     if (!selectedDate || availableDates.length === 0) return;
     setLoading(true);
@@ -187,12 +216,11 @@ export default function Backtest() {
       allParsed.sort((a, b) => a.time - b.time);
       const aggregated = aggregateBars(allParsed, timeframe);
       setBars(aggregated);
-      setCurrentIndex(aggregated.length - 1);
+      setCurrentIndex(0);
       setLoading(false);
     }).catch(() => { setBars([]); setLoading(false); });
   }, [selectedDate, symbol, timeframe, aggregateBars, availableDates]);
 
-  // Replay timer
   useEffect(() => {
     if (isPlaying) {
       intervalRef.current = setInterval(() => {
@@ -215,7 +243,7 @@ export default function Backtest() {
   const handleStepBack = () => { setIsPlaying(false); setCurrentIndex(p => Math.max(p - 1, 0)); };
   const handleSkipToStart = () => { setIsPlaying(false); setCurrentIndex(0); };
   const handleSkipToEnd = () => { setIsPlaying(false); setCurrentIndex(bars.length - 1); };
-  const handleSeek = (i) => setCurrentIndex(i);
+  const handleSeek = (i) => { setCurrentIndex(i); };
 
   const handleDateNav = (dir) => {
     const idx = availableDates.indexOf(selectedDate);
@@ -250,7 +278,6 @@ export default function Backtest() {
 
   const currentBar = bars[currentIndex];
   const spec = CONTRACTS[symbol];
-  const tfLabel = TIMEFRAMES.find(t => t.s === timeframe)?.l || '1m';
 
   const filteredSymbols = Object.keys(CONTRACTS).filter(s =>
     s.toLowerCase().includes(symbolFilter.toLowerCase()) ||
@@ -262,16 +289,15 @@ export default function Backtest() {
   return (
     <>
       <Head>
-        <title>AnooReplay</title>
+        <title>AnooReplay{sessionName ? ` — ${sessionName}` : ''}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
       <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} settings={chartSettings} onUpdate={setChartSettings} />
 
       <div className="app-layout">
-        {/* Left toolbar — drawing tools */}
         <div className="app-sidebar">
-          <Link href="/" className="sidebar-icon" title="Home" style={{ marginBottom: 4 }}>
+          <Link href="/sessions" className="sidebar-icon" title="Sessions" style={{ marginBottom: 4 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           </Link>
           <div className="sidebar-divider" />
@@ -327,9 +353,7 @@ export default function Backtest() {
         </div>
 
         <div className="app-main">
-          {/* Top bar — NamiReplays style */}
           <div className="topbar">
-            {/* Symbol selector */}
             <div style={{ position: 'relative' }} className="sym-trigger-wrap">
               <button className="sym-trigger" onClick={() => setShowSymbolDropdown(v => !v)}>
                 <span>{symbol}</span>
@@ -356,7 +380,6 @@ export default function Backtest() {
 
             <div className="topbar-divider" />
 
-            {/* Timeframes */}
             {TIMEFRAMES.map(tf => (
               <button key={tf.s} className={`tfbtn ${timeframe === tf.s ? 'active' : ''}`} onClick={() => setTimeframe(tf.s)}>
                 {tf.l}
@@ -365,7 +388,6 @@ export default function Backtest() {
 
             <div className="topbar-divider" />
 
-            {/* Date picker */}
             <div className="date-picker">
               <button className="date-nav-btn" onClick={() => handleDateNav(-1)}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
@@ -378,27 +400,15 @@ export default function Backtest() {
 
             <div className="topbar-spacer" />
 
-            {/* Toolbar buttons */}
-            <ToolButton
-              title="Show trade markers"
-              active={showMarks}
-              onClick={() => setShowMarks(p => !p)}
-              icon="M12 2v20M2 12h20"
-            />
-            <ToolButton
-              title="Toggle trading panel"
-              active={showPanels}
-              onClick={() => setShowPanels(p => !p)}
-              icon="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"
-            />
-            <ToolButton
-              title="Chart settings"
-              onClick={() => setShowSettings(true)}
-              icon="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-            />
+            {sessionId && sessionName && (
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-muted)', marginRight: 8 }}>{sessionName}</span>
+            )}
+
+            <ToolButton title="Show trade markers" active={showMarks} onClick={() => setShowMarks(p => !p)} icon="M12 2v20M2 12h20" />
+            <ToolButton title="Toggle trading panel" active={showPanels} onClick={() => setShowPanels(p => !p)} icon="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+            <ToolButton title="Chart settings" onClick={() => setShowSettings(true)} icon="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
           </div>
 
-          {/* Content area */}
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
             <div className="chart-container">
               {loading ? (

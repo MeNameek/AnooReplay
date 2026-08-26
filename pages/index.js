@@ -18,7 +18,7 @@ export default function Home() {
       </div>
 
       <nav className="land-nav">
-        <Link href="/backtest">
+        <Link href="/start">
           <div className="land-link">
             <span className="land-link-num">01</span>
             <div className="land-link-body">
@@ -31,9 +31,22 @@ export default function Home() {
           </div>
         </Link>
 
-        <Link href="/journal">
+        <Link href="/sessions">
           <div className="land-link">
             <span className="land-link-num">02</span>
+            <div className="land-link-body">
+              <div className="land-link-title">Backtest</div>
+              <div className="land-link-desc">Create sessions, track performance, and paper trade.</div>
+            </div>
+            <span className="land-link-arrow">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </span>
+          </div>
+        </Link>
+
+        <Link href="/journal">
+          <div className="land-link">
+            <span className="land-link-num">03</span>
             <div className="land-link-body">
               <div className="land-link-title">Journal</div>
               <div className="land-link-desc">Every closed trade, laid out as a scrollable ledger.</div>
@@ -45,7 +58,7 @@ export default function Home() {
         </Link>
 
         <div className="land-link" style={{ opacity: 0.35, cursor: 'default' }}>
-          <span className="land-link-num">03</span>
+          <span className="land-link-num">04</span>
           <div className="land-link-body">
             <div className="land-link-title">Daily Challenge</div>
             <div className="land-link-desc">One hidden day. One try. Climb the board.</div>

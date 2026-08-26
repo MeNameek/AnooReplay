@@ -19,14 +19,6 @@ function formatCountdown(seconds) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-function formatDate(ts) {
-  if (!ts) return '';
-  const d = new Date(ts * 1000);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}  ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} ET`;
-}
-
 export default function Chart({
   data, currentIndex, onCrosshairMove,
   positions = [], trades = [], showMarks = true,
@@ -38,18 +30,18 @@ export default function Chart({
   const candleRef = useRef(null);
   const volumeRef = useRef(null);
   const cursorLineRef = useRef(null);
+  const cursorBarIndex = useRef(-1);
   const markersApiRef = useRef(null);
   const priceLinesRef = useRef([]);
-  const drawingLinesRef = useRef(null);
   const drawingLinesArray = useRef([]);
   const [drawingState, setDrawingState] = useState(null);
   const [ctxMenu, setCtxMenu] = useState(null);
   const [countdown, setCountdown] = useState('');
   const [crosshairData, setCrosshairData] = useState(null);
+  const initialScrollDone = useRef(false);
 
   const settings = { ...DEFAULT_SETTINGS, ...chartSettings };
 
-  // Countdown timer
   useEffect(() => {
     const intervalMs = (timeframe || 60) * 1000;
     if (intervalMs >= 86400000) { setCountdown(''); return; }
@@ -64,10 +56,8 @@ export default function Chart({
     return () => clearInterval(id);
   }, [timeframe]);
 
-  // Create chart once
   useEffect(() => {
     if (!containerRef.current) return;
-
     const chart = createChart(containerRef.current, {
       layout: {
         background: { color: settings.bgColor },
@@ -89,7 +79,7 @@ export default function Chart({
         timeVisible: true,
         secondsVisible: false,
         barSpacing: 8,
-        rightOffset: 5,
+        rightOffset: 20,
       },
       rightPriceScale: {
         borderColor: '#27272a',
@@ -119,6 +109,8 @@ export default function Chart({
     chartRef.current = chart;
     candleRef.current = candle;
     volumeRef.current = volume;
+    cursorBarIndex.current = -1;
+    initialScrollDone.current = false;
 
     if (onCrosshairMove) {
       chart.subscribeCrosshairMove((param) => {
@@ -142,7 +134,6 @@ export default function Chart({
     return () => { ro.disconnect(); chart.remove(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update chart settings when they change
   useEffect(() => {
     if (!chartRef.current || !candleRef.current || !volumeRef.current) return;
     chartRef.current.applyOptions({
@@ -156,7 +147,6 @@ export default function Chart({
     });
   }, [settings.bgColor, settings.gridColor, settings.textColor, settings.upColor, settings.downColor, settings.wickUp, settings.wickDown]);
 
-  // ALWAYS show ALL data — never slice. Cursor is a separate marker.
   useEffect(() => {
     if (!data || !candleRef.current || !volumeRef.current) return;
     if (data.length === 0) return;
@@ -171,15 +161,16 @@ export default function Chart({
       color: b.close >= b.open ? 'rgba(38,166,154,0.2)' : 'rgba(239,83,80,0.2)',
     })));
 
-    if (currentIndex >= 0 && currentIndex < data.length && chartRef.current) {
-      chartRef.current.timeScale().scrollToPosition(10, false);
-    }
+    cursorBarIndex.current = -1;
+    initialScrollDone.current = false;
   }, [data]);
 
-  // Replay cursor — price line that moves with currentIndex
   useEffect(() => {
     if (!candleRef.current || !data || data.length === 0) return;
     if (currentIndex < 0 || currentIndex >= data.length) return;
+
+    if (cursorBarIndex.current === currentIndex) return;
+    cursorBarIndex.current = currentIndex;
 
     if (cursorLineRef.current) {
       try { candleRef.current.removePriceLine(cursorLineRef.current); } catch (e) {}
@@ -187,6 +178,8 @@ export default function Chart({
     }
 
     const bar = data[currentIndex];
+    if (!bar) return;
+
     cursorLineRef.current = candleRef.current.createPriceLine({
       price: bar.close,
       color: '#2962ff',
@@ -200,21 +193,38 @@ export default function Chart({
 
     if (chartRef.current) {
       const ts = chartRef.current.timeScale();
-      const visibleRange = ts.getVisibleLogicalRange();
-      if (visibleRange) {
-        if (currentIndex > visibleRange.to - 10 || currentIndex < visibleRange.from + 10) {
-          ts.scrollToPosition(Math.floor(data.length - currentIndex - 20), false);
+
+      if (!initialScrollDone.current) {
+        initialScrollDone.current = true;
+        const range = ts.getVisibleLogicalRange();
+        if (range) {
+          const visibleBars = range.to - range.from;
+          const newTo = Math.min(data.length, currentIndex + Math.floor(visibleBars * 0.15));
+          const newFrom = Math.max(0, newTo - visibleBars);
+          ts.setVisibleLogicalRange({ from: newFrom, to: newTo });
+        } else {
+          ts.scrollToPosition(20, false);
         }
-      } else {
-        ts.scrollToPosition(Math.floor(data.length - currentIndex - 20), false);
+        return;
+      }
+
+      const range = ts.getVisibleLogicalRange();
+      if (range) {
+        const visibleBars = range.to - range.from;
+        const rightEdge = range.to;
+        const leftEdge = range.from;
+
+        if (currentIndex >= rightEdge - 3 || currentIndex <= leftEdge + 3) {
+          const newTo = Math.min(data.length, currentIndex + Math.floor(visibleBars * 0.15));
+          const newFrom = Math.max(0, newTo - visibleBars);
+          ts.setVisibleLogicalRange({ from: newFrom, to: newTo });
+        }
       }
     }
   }, [data, currentIndex]);
 
-  // Trade markers
   useEffect(() => {
     if (!markersApiRef.current || !data || data.length === 0) return;
-
     const markers = [];
     if (showMarks) {
       for (const t of trades) {
@@ -246,7 +256,6 @@ export default function Chart({
     try { markersApiRef.current.setMarkers(markers); } catch (e) {}
   }, [trades, positions, showMarks]);
 
-  // Position entry price lines
   useEffect(() => {
     if (!candleRef.current) return;
     for (const pl of priceLinesRef.current) {
@@ -257,9 +266,7 @@ export default function Chart({
       const line = candleRef.current.createPriceLine({
         price: p.entryPrice,
         color: p.side === 'long' ? 'rgba(38,166,154,0.6)' : 'rgba(239,83,80,0.6)',
-        lineWidth: 1,
-        lineStyle: 2,
-        axisLabelVisible: true,
+        lineWidth: 1, lineStyle: 2, axisLabelVisible: true,
         title: `${p.side === 'long' ? 'LONG' : 'SHORT'} ${p.qty} @ ${p.entryPrice.toFixed(2)}`,
         axisLabelColor: p.side === 'long' ? '#26a69a' : '#ef5350',
         axisLabelTextColor: '#ffffff',
@@ -268,7 +275,6 @@ export default function Chart({
     }
   }, [positions]);
 
-  // User drawings
   useEffect(() => {
     if (!candleRef.current) return;
     for (const pl of drawingLinesArray.current) {
@@ -280,8 +286,7 @@ export default function Chart({
         const line = candleRef.current.createPriceLine({
           price: d.price, color: d.color || '#2962ff', lineWidth: 1, lineStyle: 0,
           axisLabelVisible: true, title: d.label || '',
-          axisLabelColor: d.color || '#2962ff',
-          axisLabelTextColor: '#ffffff',
+          axisLabelColor: d.color || '#2962ff', axisLabelTextColor: '#ffffff',
         });
         drawingLinesArray.current.push(line);
       } else if (d.type === 'longpos' || d.type === 'shortpos') {
@@ -324,15 +329,12 @@ export default function Chart({
     }
   }, [drawings]);
 
-  // Drawing tool — click to place
   const handleClick = useCallback((e) => {
     if (!activeDrawing || activeDrawing === 'crosshair' || !chartRef.current || !candleRef.current || !data) return;
     if (currentIndex < 0 || currentIndex >= data.length) return;
-
     const rect = containerRef.current.getBoundingClientRect();
-    const series = candleRef.current;
     const y = e.clientY - rect.top;
-    const price = series.coordinateToPrice(y);
+    const price = candleRef.current.coordinateToPrice(y);
 
     if (activeDrawing === 'hline') {
       onDrawingAdd({ type: 'hline', price, color: '#2962ff', label: '' });
@@ -362,18 +364,13 @@ export default function Chart({
     }
   }, [activeDrawing, data, currentIndex, drawingState, onDrawingAdd]);
 
-  // Right-click context menu
   const handleContextMenu = useCallback((e) => {
     e.preventDefault();
     if (!containerRef.current || !chartRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const y = e.clientY - rect.top;
     const price = candleRef.current ? candleRef.current.coordinateToPrice(y) : 0;
-    setCtxMenu({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      price,
-    });
+    setCtxMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, price });
   }, []);
 
   useEffect(() => {
@@ -409,7 +406,6 @@ export default function Chart({
         onClick={handleClick}
       />
 
-      {/* OHLCV Legend */}
       {currentBar && (
         <div className="chart-legend">
           <div>
@@ -440,7 +436,6 @@ export default function Chart({
         </div>
       )}
 
-      {/* Context Menu */}
       {ctxMenu && (
         <div className="chart-ctx-menu" style={{ left: Math.min(ctxMenu.x - (containerRef.current?.getBoundingClientRect()?.left || 0), (containerRef.current?.clientWidth || 300) - 200), top: Math.min(ctxMenu.y - (containerRef.current?.getBoundingClientRect()?.top || 0), (containerRef.current?.clientHeight || 200) - 120) }}>
           <button onClick={(e) => { e.stopPropagation(); menuAction('reset'); }}>Reset chart view</button>
@@ -450,7 +445,6 @@ export default function Chart({
         </div>
       )}
 
-      {/* Drawing state indicator */}
       {drawingState && (
         <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 20 }}>
           <div className="replay-badge">
