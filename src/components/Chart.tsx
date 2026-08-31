@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, IChartApi, ISeriesApi } from 'lightweight-charts'
 import type { Bar, Drawing } from '../lib/types'
+import type { ChartSettings } from '../lib/settings'
 
 type Props = {
   bars: Bar[]
@@ -11,10 +12,11 @@ type Props = {
   drawings: Drawing[]
   activeTool: string | null
   onAddDrawing: (d: Drawing) => void
+  settings?: ChartSettings
   onPriceClick?: (price: number, time: number) => void
 }
 
-export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, drawings, activeTool, onAddDrawing }: Props) {
+export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, drawings, activeTool, onAddDrawing, settings }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -27,21 +29,28 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
   // create chart once
   useEffect(() => {
     if (!wrapRef.current) return
+    const bg = settings?.background ?? '#0a0a0a'
+    const text = settings?.axisTextColor ?? '#a1a1aa'
+    const gridC = settings?.showGrid === false ? 'transparent' : (settings?.gridColor ?? '#1a1a1a')
     const chart = createChart(wrapRef.current, {
-      layout: { background: { color: '#0a0a0a' }, textColor: '#a1a1aa', fontSize: 11, fontFamily: 'Inter, ui-monospace' },
-      grid: { vertLines: { color: '#1a1a1a' }, horzLines: { color: '#1a1a1a' } },
-      crosshair: { mode: 0 as any },
-      timeScale: { borderColor: '#27272a', timeVisible: true, secondsVisible: false, rightOffset: 12, barSpacing: 6 },
-      rightPriceScale: { borderColor: '#27272a', scaleMargins: { top: 0.08, bottom: 0.24 }, autoScale: true },
+      layout: { background: { color: bg }, textColor: text, fontSize: settings?.fontSize ?? 11, fontFamily: 'Inter, ui-monospace' },
+      grid: { vertLines: { color: gridC }, horzLines: { color: gridC } },
+      crosshair: {
+        mode: 0 as any,
+        vertLine: { color: settings?.crosshairColor ?? 'rgba(255,255,255,0.15)', style: settings?.crosshairStyle === 'solid' ? 0 : settings?.crosshairStyle === 'dashed' ? 1 : 2, visible: settings?.crosshairCursor !== false },
+        horzLine: { color: settings?.crosshairColor ?? 'rgba(255,255,255,0.15)', style: settings?.crosshairStyle === 'solid' ? 0 : settings?.crosshairStyle === 'dashed' ? 1 : 2, visible: settings?.crosshairCursor !== false },
+      },
+      timeScale: { borderColor: '#27272a', timeVisible: settings?.showTime !== false, secondsVisible: settings?.showSeconds ?? false, rightOffset: 12, barSpacing: 6 },
+      rightPriceScale: { borderColor: '#27272a', scaleMargins: { top: 0.08, bottom: 0.24 }, autoScale: settings?.autoScale !== false },
       handleScroll: true,
       handleScale: true,
     })
     const candle = chart.addSeries(CandlestickSeries, {
-      upColor: '#e7e7e7', downColor: '#2a2a2a',
-      borderUpColor: '#e7e7e7', borderDownColor: '#2a2a2a',
-      wickUpColor: '#e7e7e7', wickDownColor: '#2a2a2a',
+      upColor: settings?.upColor ?? '#e7e7e7', downColor: settings?.downColor ?? '#2a2a2a',
+      borderUpColor: settings?.upBorder ?? '#e7e7e7', borderDownColor: settings?.downBorder ?? '#2a2a2a',
+      wickUpColor: settings?.upWick ?? '#e7e7e7', wickDownColor: settings?.downWick ?? '#2a2a2a',
     })
-    const vol = chart.addSeries(HistogramSeries, { priceScaleId: 'vol', priceFormat: { type: 'volume' } })
+    const vol = chart.addSeries(HistogramSeries, { priceScaleId: 'vol', priceFormat: { type: 'volume' }, priceLineVisible: false })
     vol.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } })
 
     chartRef.current = chart
@@ -54,6 +63,29 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
     ro.observe(wrapRef.current)
     return () => { ro.disconnect(); chart.remove(); chartRef.current = null }
   }, [])
+
+  // apply settings live (Nami Settings modal)
+  useEffect(() => {
+    if (!chartRef.current || !candleRef.current || !volRef.current || !settings) return
+    const gridC = settings.showGrid === false ? 'transparent' : settings.gridColor
+    chartRef.current.applyOptions({
+      layout: { background: { color: settings.background }, textColor: settings.axisTextColor, fontSize: settings.fontSize as any },
+      grid: { vertLines: { color: gridC } as any, horzLines: { color: gridC } as any },
+      timeScale: { timeVisible: settings.showTime, secondsVisible: settings.showSeconds } as any,
+      rightPriceScale: { autoScale: settings.autoScale } as any,
+    })
+    candleRef.current.applyOptions({
+      upColor: settings.upColor, downColor: settings.downColor,
+      borderUpColor: settings.upBorder, borderDownColor: settings.downBorder,
+      wickUpColor: settings.upWick, wickDownColor: settings.downWick,
+    } as any)
+    chartRef.current.applyOptions({
+      crosshair: {
+        vertLine: { color: settings.crosshairColor, style: settings.crosshairStyle === 'solid' ? 0 : settings.crosshairStyle === 'dashed' ? 1 : 2, visible: settings.crosshairCursor } as any,
+        horzLine: { color: settings.crosshairColor, style: settings.crosshairStyle === 'solid' ? 0 : settings.crosshairStyle === 'dashed' ? 1 : 2, visible: settings.crosshairCursor } as any,
+      } as any
+    })
+  }, [settings])
 
   // set data (replay slice) — Nami-like: preserve zoom/position, don't fitContent on every update
   useEffect(() => {
