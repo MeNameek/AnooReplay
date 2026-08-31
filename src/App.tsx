@@ -152,7 +152,7 @@ export default function App() {
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a', fontFamily: 'monospace', fontSize: 12 }}>Loading {selectedDate}...</div>
           ) : (
             <div style={{ flex: 1, position: 'relative' }}>
-              <Chart bars={bars} cursor={cursor} replayMode={replayMode} timeframe={timeframe} drawings={drawings} activeTool={activeTool} onAddDrawing={addDrawing} />
+              <Chart bars={bars} cursor={cursor} replayMode={replayMode} timeframe={timeframe} dateKey={selectedDate} drawings={drawings} activeTool={activeTool} onAddDrawing={addDrawing} />
               {/* Nami-style watermark */}
               <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', fontSize: 120, fontWeight: 800, color: 'rgba(255,255,255,0.04)', pointerEvents: 'none', letterSpacing: -8 }}>{tfLabel}</div>
             </div>

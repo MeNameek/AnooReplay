@@ -7,18 +7,22 @@ type Props = {
   cursor: number // index of replay cursor, bars after cursor are future (hidden in replay mode)
   replayMode: boolean
   timeframe: number
+  dateKey?: string // increments when user jumps to new date — forces initial 150-bar view like Nami
   drawings: Drawing[]
   activeTool: string | null
   onAddDrawing: (d: Drawing) => void
   onPriceClick?: (price: number, time: number) => void
 }
 
-export default function Chart({ bars, cursor, replayMode, timeframe, drawings, activeTool, onAddDrawing }: Props) {
+export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, drawings, activeTool, onAddDrawing }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const [pending, setPending] = useState<any>(null)
+  const isInitialRef = useRef(true)
+  const prevBarsRef = useRef<Bar[]>([])
+  const prevDateKeyRef = useRef<string | undefined>(undefined)
 
   // create chart once
   useEffect(() => {
@@ -28,7 +32,7 @@ export default function Chart({ bars, cursor, replayMode, timeframe, drawings, a
       grid: { vertLines: { color: '#1a1a1a' }, horzLines: { color: '#1a1a1a' } },
       crosshair: { mode: 0 as any },
       timeScale: { borderColor: '#27272a', timeVisible: true, secondsVisible: false, rightOffset: 12, barSpacing: 6 },
-      rightPriceScale: { borderColor: '#27272a', scaleMargins: { top: 0.08, bottom: 0.24 } },
+      rightPriceScale: { borderColor: '#27272a', scaleMargins: { top: 0.08, bottom: 0.24 }, autoScale: true },
       handleScroll: true,
       handleScale: true,
     })
@@ -51,18 +55,67 @@ export default function Chart({ bars, cursor, replayMode, timeframe, drawings, a
     return () => { ro.disconnect(); chart.remove(); chartRef.current = null }
   }, [])
 
-  // set data (replay slice)
+  // set data (replay slice) — Nami-like: preserve zoom/position, don't fitContent on every update
   useEffect(() => {
     if (!candleRef.current || !volRef.current) return
-    if (bars.length === 0) { candleRef.current.setData([]); volRef.current.setData([]); return }
+    if (bars.length === 0) { candleRef.current.setData([]); volRef.current.setData([]); prevBarsRef.current = []; return }
     const visible = replayMode ? bars.slice(0, Math.max(1, cursor + 1)) : bars
-    // lightweight-charts expects Time type; we use unix seconds
+    const wasInitial = isInitialRef.current
+    const barsChanged = prevBarsRef.current !== bars
+    const dateChanged = dateKey !== undefined && prevDateKeyRef.current !== undefined && prevDateKeyRef.current !== dateKey
+
+    // capture current visible time window before data change (only for timeframe/switch, not for simple cursor step)
+    let prevFromTime: number | null = null
+    let prevToTime: number | null = null
+    let prevBarSpacing: number | null = null
+    if (!wasInitial && barsChanged && chartRef.current && prevBarsRef.current.length) {
+      const range = chartRef.current.timeScale().getVisibleLogicalRange()
+      const opts: any = chartRef.current.timeScale().options()
+      prevBarSpacing = opts.barSpacing
+      if (range) {
+        // map logical indices to time using previous bars
+        const clampedFrom = Math.max(0, Math.min(prevBarsRef.current.length - 1, Math.floor(range.from)))
+        const clampedTo = Math.max(0, Math.min(prevBarsRef.current.length - 1, Math.ceil(range.to) - 1))
+        prevFromTime = prevBarsRef.current[clampedFrom]?.time ?? null
+        prevToTime = prevBarsRef.current[clampedTo]?.time ?? null
+      }
+    }
+
     candleRef.current.setData(visible.map(b => ({ time: b.time as any, open: b.open, high: b.high, low: b.low, close: b.close })))
     volRef.current.setData(visible.map(b => ({ time: b.time as any, value: b.volume, color: b.close >= b.open ? 'rgba(231,231,231,0.9)' : 'rgba(113,113,122,0.6)' })))
-    // keep cursor price line
-    // auto-fit after data change only once
-    if (chartRef.current) chartRef.current.timeScale().fitContent()
-  }, [bars, cursor, replayMode])
+
+    if (!chartRef.current) { prevBarsRef.current = bars; prevDateKeyRef.current = dateKey; return }
+    if (wasInitial || dateChanged) {
+      // like Nami: start centered on ~150 bars ending at cursor (not fitted to 30 days) — see Image 2: ~118 bars visible
+      const dataLen = visible.length
+      const show = 150 // Nami shows ~120-180 bars at 1m
+      const from = Math.max(0, dataLen - show)
+      const to = dataLen
+      chartRef.current.timeScale().applyOptions({ barSpacing: 7, rightOffset: 8 })
+      chartRef.current.timeScale().setVisibleLogicalRange({ from, to })
+      isInitialRef.current = false
+    } else if (barsChanged && prevFromTime != null && prevToTime != null) {
+      // timeframe / date switch: keep same time window and barSpacing (don't reset like before)
+      if (prevBarSpacing != null) chartRef.current.timeScale().applyOptions({ barSpacing: prevBarSpacing })
+      const findIdx = (t: number, arr: Bar[]) => {
+        let lo = 0, hi = arr.length - 1, ans = 0
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1
+          if (arr[mid].time <= t) { ans = mid; lo = mid + 1 } else hi = mid - 1
+        }
+        return ans
+      }
+      const fromIdxNew = Math.min(visible.length - 1, findIdx(prevFromTime!, bars))
+      const toIdxNew = Math.min(visible.length, findIdx(prevToTime!, bars) + 1)
+      const count = Math.max(10, toIdxNew - fromIdxNew)
+      if (count < visible.length * 2) {
+        chartRef.current.timeScale().setVisibleLogicalRange({ from: fromIdxNew, to: toIdxNew })
+      }
+    }
+    prevBarsRef.current = bars
+    prevDateKeyRef.current = dateKey
+    // stepping (cursor only) doesn't reset — follow-cursor effect below handles keeping cursor in view
+  }, [bars, cursor, replayMode, dateKey])
 
   // follow cursor
   useEffect(() => {
