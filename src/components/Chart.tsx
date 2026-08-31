@@ -64,20 +64,19 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
     const barsChanged = prevBarsRef.current !== bars
     const dateChanged = dateKey !== undefined && prevDateKeyRef.current !== undefined && prevDateKeyRef.current !== dateKey
 
-    // capture current visible time window before data change (only for timeframe/switch, not for simple cursor step)
-    let prevFromTime: number | null = null
-    let prevToTime: number | null = null
+    // capture center time + visible bar count before data change (Nami keeps ~80-150 bars visible regardless of TF)
+    let prevCenterTime: number | null = null
+    let prevVisibleCount: number | null = null
     let prevBarSpacing: number | null = null
     if (!wasInitial && barsChanged && chartRef.current && prevBarsRef.current.length) {
       const range = chartRef.current.timeScale().getVisibleLogicalRange()
       const opts: any = chartRef.current.timeScale().options()
       prevBarSpacing = opts.barSpacing
       if (range) {
-        // map logical indices to time using previous bars
-        const clampedFrom = Math.max(0, Math.min(prevBarsRef.current.length - 1, Math.floor(range.from)))
-        const clampedTo = Math.max(0, Math.min(prevBarsRef.current.length - 1, Math.ceil(range.to) - 1))
-        prevFromTime = prevBarsRef.current[clampedFrom]?.time ?? null
-        prevToTime = prevBarsRef.current[clampedTo]?.time ?? null
+        prevVisibleCount = range.to - range.from
+        const centerIdx = Math.floor((range.from + range.to) / 2)
+        const clamped = Math.max(0, Math.min(prevBarsRef.current.length - 1, centerIdx))
+        prevCenterTime = prevBarsRef.current[clamped]?.time ?? null
       }
     }
 
@@ -94,8 +93,8 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
       chartRef.current.timeScale().applyOptions({ barSpacing: 7, rightOffset: 8 })
       chartRef.current.timeScale().setVisibleLogicalRange({ from, to })
       isInitialRef.current = false
-    } else if (barsChanged && prevFromTime != null && prevToTime != null) {
-      // timeframe / date switch: keep same time window and barSpacing (don't reset like before)
+    } else if (barsChanged && prevCenterTime != null && prevVisibleCount != null) {
+      // timeframe switch: keep SAME BAR COUNT & zoom level like Nami (Images 4-6 keep ~90 bars), anchored at same center time
       if (prevBarSpacing != null) chartRef.current.timeScale().applyOptions({ barSpacing: prevBarSpacing })
       const findIdx = (t: number, arr: Bar[]) => {
         let lo = 0, hi = arr.length - 1, ans = 0
@@ -105,12 +104,12 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
         }
         return ans
       }
-      const fromIdxNew = Math.min(visible.length - 1, findIdx(prevFromTime!, bars))
-      const toIdxNew = Math.min(visible.length, findIdx(prevToTime!, bars) + 1)
-      const count = Math.max(10, toIdxNew - fromIdxNew)
-      if (count < visible.length * 2) {
-        chartRef.current.timeScale().setVisibleLogicalRange({ from: fromIdxNew, to: toIdxNew })
-      }
+      const centerIdxNew = findIdx(prevCenterTime!, bars)
+      const half = Math.floor(prevVisibleCount! / 2)
+      let from = Math.max(0, centerIdxNew - half)
+      let to = from + prevVisibleCount!
+      if (to > visible.length) { to = visible.length; from = Math.max(0, to - prevVisibleCount!) }
+      chartRef.current.timeScale().setVisibleLogicalRange({ from, to })
     }
     prevBarsRef.current = bars
     prevDateKeyRef.current = dateKey
