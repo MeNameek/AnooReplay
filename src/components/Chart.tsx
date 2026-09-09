@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, IChartApi, ISeriesApi } from 'lightweight-charts'
 import type { Bar, Drawing } from '../lib/types'
 import type { ChartSettings } from '../lib/settings'
+import ContextMenu from './ContextMenu'
 
 type Props = {
   bars: Bar[]
@@ -13,45 +14,51 @@ type Props = {
   activeTool: string | null
   onAddDrawing: (d: Drawing) => void
   settings?: ChartSettings
+  onResetView?: () => void
+  onHidePanels?: () => void
+  onToggleExec?: () => void
+  execVisible?: boolean
   onPriceClick?: (price: number, time: number) => void
 }
 
-export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, drawings, activeTool, onAddDrawing, settings }: Props) {
+export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, drawings, activeTool, onAddDrawing, settings, onResetView, onHidePanels, onToggleExec, execVisible = true }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const [pending, setPending] = useState<any>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; price: number | null } | null>(null)
   const isInitialRef = useRef(true)
   const prevBarsRef = useRef<Bar[]>([])
   const prevDateKeyRef = useRef<string | undefined>(undefined)
 
-  // create chart once
+  // create chart once — Nami-like thicker candles (≈ image 1 is fatter than our thin image 2)
   useEffect(() => {
     if (!wrapRef.current) return
-    const bg = settings?.background ?? '#0a0a0a'
-    const text = settings?.axisTextColor ?? '#a1a1aa'
-    const gridC = settings?.showGrid === false ? 'transparent' : (settings?.gridColor ?? '#1a1a1a')
+    const bg = settings?.background ?? '#E8E6D6'
+    const text = settings?.axisTextColor ?? '#6B6B6B'
+    const gridC = settings?.showGrid === false ? 'transparent' : (settings?.gridColor ?? '#DDDCCF')
     const chart = createChart(wrapRef.current, {
       layout: { background: { color: bg }, textColor: text, fontSize: settings?.fontSize ?? 11, fontFamily: 'Inter, ui-monospace' },
-      grid: { vertLines: { color: gridC }, horzLines: { color: gridC } },
+      grid: { vertLines: { color: gridC, style: 1 as any }, horzLines: { color: gridC, style: 1 as any } },
       crosshair: {
         mode: 0 as any,
-        vertLine: { color: settings?.crosshairColor ?? 'rgba(255,255,255,0.15)', style: settings?.crosshairStyle === 'solid' ? 0 : settings?.crosshairStyle === 'dashed' ? 1 : 2, visible: settings?.crosshairCursor !== false },
-        horzLine: { color: settings?.crosshairColor ?? 'rgba(255,255,255,0.15)', style: settings?.crosshairStyle === 'solid' ? 0 : settings?.crosshairStyle === 'dashed' ? 1 : 2, visible: settings?.crosshairCursor !== false },
+        vertLine: { color: settings?.crosshairColor ?? '#8A8986', width: 1, style: settings?.crosshairStyle === 'solid' ? 0 : settings?.crosshairStyle === 'dashed' ? 1 : 2, labelBackgroundColor: '#1a1a1e', visible: settings?.crosshairCursor !== false },
+        horzLine: { color: settings?.crosshairColor ?? '#8A8986', width: 1, style: settings?.crosshairStyle === 'solid' ? 0 : settings?.crosshairStyle === 'dashed' ? 1 : 2, labelBackgroundColor: '#1a1a1e', visible: settings?.crosshairCursor !== false },
       },
-      timeScale: { borderColor: '#27272a', timeVisible: settings?.showTime !== false, secondsVisible: settings?.showSeconds ?? false, rightOffset: 12, barSpacing: 6 },
-      rightPriceScale: { borderColor: '#27272a', scaleMargins: { top: 0.08, bottom: 0.24 }, autoScale: settings?.autoScale !== false },
+      timeScale: { borderColor: '#D1CFBC', timeVisible: settings?.showTime !== false, secondsVisible: settings?.showSeconds ?? false, rightOffset: 10, barSpacing: 9, minBarSpacing: 4 },
+      rightPriceScale: { borderColor: '#D1CFBC', scaleMargins: { top: 0.06, bottom: 0.18 }, autoScale: settings?.autoScale !== false },
       handleScroll: true,
       handleScale: true,
     })
     const candle = chart.addSeries(CandlestickSeries, {
-      upColor: settings?.upColor ?? '#e7e7e7', downColor: settings?.downColor ?? '#2a2a2a',
-      borderUpColor: settings?.upBorder ?? '#e7e7e7', borderDownColor: settings?.downBorder ?? '#2a2a2a',
-      wickUpColor: settings?.upWick ?? '#e7e7e7', wickDownColor: settings?.downWick ?? '#2a2a2a',
+      upColor: settings?.upColor ?? '#F0EFEC', downColor: settings?.downColor ?? '#2B2B2B',
+      borderUpColor: settings?.upBorder ?? '#000000', borderDownColor: settings?.downBorder ?? '#000000',
+      wickUpColor: settings?.upWick ?? '#000000', wickDownColor: settings?.downWick ?? '#000000',
+      borderVisible: true, wickVisible: true,
     })
     const vol = chart.addSeries(HistogramSeries, { priceScaleId: 'vol', priceFormat: { type: 'volume' }, priceLineVisible: false })
-    vol.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } })
+    vol.priceScale().applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } })
 
     chartRef.current = chart
     candleRef.current = candle
@@ -117,12 +124,12 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
 
     if (!chartRef.current) { prevBarsRef.current = bars; prevDateKeyRef.current = dateKey; return }
     if (wasInitial || dateChanged) {
-      // like Nami: start centered on ~150 bars ending at cursor (not fitted to 30 days) — see Image 2: ~118 bars visible
+      // like Nami Image 1 is fatter: ~80-110 bars visible, barSpacing 9 makes candles bigger than our previous 150@7
       const dataLen = visible.length
-      const show = 150 // Nami shows ~120-180 bars at 1m
+      const show = 110 // Nami shows ~90-120 bars at 1m
       const from = Math.max(0, dataLen - show)
       const to = dataLen
-      chartRef.current.timeScale().applyOptions({ barSpacing: 7, rightOffset: 8 })
+      chartRef.current.timeScale().applyOptions({ barSpacing: 9, rightOffset: 10 })
       chartRef.current.timeScale().setVisibleLogicalRange({ from, to })
       isInitialRef.current = false
     } else if (barsChanged && prevCenterTime != null && prevVisibleCount != null) {
@@ -289,10 +296,31 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
     return els
   })()
 
+  const handleContext = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (!wrapRef.current || !candleRef.current) return
+    const rect = wrapRef.current.getBoundingClientRect()
+    const y = e.clientY - rect.top
+    const price = candleRef.current.coordinateToPrice(y) as number | null
+    setMenu({ x: e.clientX, y: e.clientY, price })
+  }
+  const doReset = () => { if (chartRef.current) { chartRef.current.timeScale().fitContent(); chartRef.current.timeScale().applyOptions({ barSpacing: 9, rightOffset: 10 }); const len = (replayMode ? bars.slice(0, cursor+1) : bars).length; const show=110; chartRef.current.timeScale().setVisibleLogicalRange({ from: Math.max(0,len-show), to: len }); } onResetView?.() }
+
   return (
-    <div ref={wrapRef} onClick={handleChartClick} style={{ width: '100%', height: '100%', position: 'relative', cursor: activeTool && activeTool !== 'cursor' ? 'crosshair' : 'default' }}>
+    <div ref={wrapRef} onClick={handleChartClick} onContextMenu={handleContext} style={{ width: '100%', height: '100%', position: 'relative', cursor: activeTool && activeTool !== 'cursor' ? 'crosshair' : 'default' }}>
       <div style={{ position: 'absolute', inset: 0 }}>{overlay}</div>
       {pending && <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(41,98,255,0.15)', border: '1px solid #2962ff', color: '#2962ff', fontSize: 11, padding: '4px 8px', borderRadius: 6, pointerEvents: 'none' }}>Click to set second point — {pending.type}</div>}
+      {menu && (
+        <ContextMenu
+          x={menu.x} y={menu.y} price={menu.price}
+          execVisible={execVisible}
+          onReset={doReset}
+          onHidePanels={()=>{ onHidePanels?.(); }}
+          onCopyPrice={()=>{ if(menu.price!=null) navigator.clipboard?.writeText(menu.price.toFixed(2)); }}
+          onToggleExec={()=> onToggleExec?.()}
+          onClose={()=>setMenu(null)}
+        />
+      )}
     </div>
   )
 }

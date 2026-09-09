@@ -9,6 +9,7 @@ import { defaultFavorites } from './lib/tools'
 import { DEFAULT_SETTINGS, type ChartSettings } from './lib/settings'
 import TimeframePicker from './components/TimeframePicker'
 import QuickSwitch from './components/QuickSwitch'
+import RightPanel from './components/RightPanel'
 
 const SPEED_OPTIONS = [0.5, 1, 2, 5, 10]
 
@@ -31,6 +32,8 @@ export default function App() {
     try { const v = localStorage.getItem('ano:settings'); return v ? { ...DEFAULT_SETTINGS, ...JSON.parse(v) } : DEFAULT_SETTINGS } catch { return DEFAULT_SETTINGS }
   })
   const [showSettings, setShowSettings] = useState(false)
+  const [showPanels, setShowPanels] = useState(true)
+  const [execVisible, setExecVisible] = useState(true)
   const timerRef = useRef<number | null>(null)
 
   useEffect(() => { localStorage.setItem('ano:favs', JSON.stringify(favorites)) }, [favorites])
@@ -113,9 +116,9 @@ export default function App() {
         </div>
         <div style={{ width:1, height:16, background:'#1a1a1e' }} />
         <TimeframePicker seconds={timeframe} onSelect={setTimeframe} />
-        <div style={{ display:'flex', alignItems:'center', gap:2, background:'#1a1a1e', padding:'2px 4px', borderRadius:6 }}>
-          <span style={{ fontSize:10, color:'#71717a' }}>◍</span><span style={{ fontSize:11, color:'#a1a1aa' }}>Indicators</span>
-        </div>
+        <button onClick={()=> alert('Indicators — TradingView indicators coming soon (SMA/EMA/VWAP placeholder)')} style={{ display:'flex', alignItems:'center', gap:4, background:'#1a1a1e', border:'1px solid #27272a', color:'#a1a1aa', padding:'3px 8px', borderRadius:6, fontSize:11 }}>
+          <span>◍</span> Indicators <span style={{ opacity:0.5 }}>▾</span>
+        </button>
         <div style={{ display:'flex', alignItems:'center', gap:4, marginLeft:4 }}>
           <span style={{ fontSize:11, color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6, display:'flex', alignItems:'center', gap:4 }}>📅 ≫ To latest</span>
           <span style={{ fontSize:11, color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6 }}>↷ Go to</span>
@@ -132,14 +135,15 @@ export default function App() {
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        <LeftToolbar activeTool={activeTool} favorites={favorites} onToggleFavorite={toggleFav} onSelectTool={id=>setActiveTool(id)} onTrash={()=>setDrawings([])} />
+        {showPanels && <LeftToolbar activeTool={activeTool} favorites={favorites} onToggleFavorite={toggleFav} onSelectTool={id=>setActiveTool(id)} onTrash={()=>setDrawings([])} />}
 
         <div style={{ flex:1, position:'relative', display:'flex', flexDirection:'column' }}>
           {bars.length===0? <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'#71717a', fontFamily:'monospace', fontSize:12 }}>Loading {selectedDate}...</div> :
           <div style={{ flex:1, position:'relative' }}>
-            <Chart bars={bars} cursor={cursor} replayMode={replayMode} timeframe={timeframe} dateKey={selectedDate} drawings={drawings} activeTool={mapTool(activeTool)} onAddDrawing={addDrawing} settings={settings} />
-            {settings.watermark && <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', fontSize:120, fontWeight:800, color:'rgba(255,255,255,0.04)', pointerEvents:'none', letterSpacing:-8 }}>{tfLabel}</div>}
+            <Chart bars={bars} cursor={cursor} replayMode={replayMode} timeframe={timeframe} dateKey={selectedDate} drawings={execVisible ? drawings : []} activeTool={mapTool(activeTool)} onAddDrawing={addDrawing} settings={settings} onHidePanels={()=>setShowPanels(false)} onToggleExec={()=>setExecVisible(v=>!v)} execVisible={execVisible} />
+            {settings.watermark && <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', fontSize:120, fontWeight:800, color:'rgba(0,0,0,0.06)', pointerEvents:'none', letterSpacing:-8 }}>{tfLabel}</div>}
             {settings.detachableToolbars && <FavoriteWidget favorites={favorites} activeTool={activeTool} onSelect={id=>setActiveTool(id)} onRemove={toggleFav} />}
+            {!showPanels && <button onClick={()=>setShowPanels(true)} style={{ position:'absolute', top:8, right:8, zIndex:20, background:'#0a0a0b', border:'1px solid #27272a', color:'#fff', padding:'6px 10px', borderRadius:8, fontSize:11 }}>Show panels</button>}
           </div>}
 
           <div style={{ height:36, display:'flex', alignItems:'center', gap:6, padding:'0 8px', borderTop:'1px solid #1a1a1e', background:'#0a0a0b', fontSize:11, position:'relative' }}>
@@ -168,14 +172,7 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ width:220, background:'#0a0a0a', borderLeft:'1px solid #1a1a1a', padding:10, display:'flex', flexDirection:'column', gap:8 }}>
-          <div style={{ fontSize:11, fontWeight:700, letterSpacing:0.6, color:'#e5e5e5' }}>NQ · {tfLabel}</div>
-          <div style={{ fontSize:11, color:'#71717a', fontFamily:'monospace' }}>{availableDates.length} days loaded</div>
-          <div style={{ height:1, background:'#1a1a1a' }} />
-          <div style={{ fontSize:11, color:'#a1a1aa' }}>Drawings: {drawings.length}</div>
-          <div style={{ fontSize:10, color:'#71717a' }}>★ to favorite → draggable widget. Click ★ again to remove.</div>
-          <button onClick={()=>setShowSettings(true)} style={{ marginTop:6, background:'#1a1a1a', border:'1px solid #27272a', color:'#e5e5e5', padding:'8px 10px', borderRadius:8, fontSize:11 }}>⚙ Chart Settings</button>
-        </div>
+        {showPanels && <RightPanel price={currentBar?.close} settingsOpen={()=>setShowSettings(true)} />}
       </div>
 
       <SettingsModal open={showSettings} onClose={()=>setShowSettings(false)} settings={settings} onChange={setSettings} />
