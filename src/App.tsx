@@ -10,6 +10,7 @@ import { DEFAULT_SETTINGS, type ChartSettings } from './lib/settings'
 import TimeframePicker from './components/TimeframePicker'
 import QuickSwitch from './components/QuickSwitch'
 import RightPanel from './components/RightPanel'
+import BottomPanel from './components/BottomPanel'
 
 const SPEED_OPTIONS = [0.5, 1, 2, 5, 10]
 
@@ -34,6 +35,21 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showPanels, setShowPanels] = useState(true)
   const [execVisible, setExecVisible] = useState(true)
+  const [bottomOpen, setBottomOpen] = useState(false)
+  const [bottomHeight, setBottomHeight] = useState(220)
+  // trading state — functional Buy/Sell + contracts
+  const [contracts, setContracts] = useState(1)
+  const [orderType, setOrderType] = useState<'Market'|'Limit'|'Stop'>('Market')
+  const [limitPrice, setLimitPrice] = useState(0)
+  const [tpEnabled, setTpEnabled] = useState(false)
+  const [tpTicks, setTpTicks] = useState(269)
+  const [slEnabled, setSlEnabled] = useState(false)
+  const [slTicks, setSlTicks] = useState(79)
+  const [riskPct, setRiskPct] = useState('1%')
+  const [position, setPosition] = useState<{ side:'long'|'short'; qty:number; entry:number } | null>(null)
+  const [orders, setOrders] = useState<any[]>([])
+  const [equity, setEquity] = useState(51548)
+  const [realized, setRealized] = useState(1548)
   const timerRef = useRef<number | null>(null)
 
   useEffect(() => { localStorage.setItem('ano:favs', JSON.stringify(favorites)) }, [favorites])
@@ -80,11 +96,39 @@ export default function App() {
     return ()=>{ if(timerRef.current) clearInterval(timerRef.current as any) }
   }, [isPlaying, speed, bars.length])
 
+  const currentBar = bars[cursor]
+  const tfLabel = TIMEFRAMES.find(t=>t.s===timeframe)?.label ?? `${timeframe/60}m`
+
   const step=(dir:number)=>{ setIsPlaying(false); setCursor(c=>Math.min(bars.length-1, Math.max(0,c+dir))) }
   const goToDate=(d:string)=>{ setIsPlaying(false); setSelectedDate(d) }
   const jumpDays=(n:number)=>{ const i=availableDates.indexOf(selectedDate); const ni=Math.min(availableDates.length-1, Math.max(0,i+n)); goToDate(availableDates[ni]) }
   const addDrawing=useCallback((d:Drawing)=>setDrawings(p=>[...p,d]),[])
   const toggleFav=(id:string)=> setFavorites(f=> f.includes(id)? f.filter(x=>x!==id): [...f,id])
+
+  // keep limit price synced to current bar when market
+  useEffect(()=>{ if(currentBar && limitPrice===0) setLimitPrice(currentBar.close) },[currentBar?.close])
+
+  const handleBuy=()=>{
+    const p = orderType==='Market' ? (currentBar?.close ?? 28991) : limitPrice
+    if(orderType!=='Market'){ setOrders(o=>[...o,{ id:Math.random().toString(36).slice(2), side:'long', type:orderType, price:p, qty:contracts }]); return }
+    const tp = tpEnabled ? p + tpTicks*0.25 : undefined
+    const sl = slEnabled ? p - slTicks*0.25 : undefined
+    setPosition({ side:'long', qty:contracts, entry:p })
+    if(tp||sl) setDrawings(d=>[...d, { id:Math.random().toString(36).slice(2), type:'long', entry:p, tp: tp ?? p+80, sl: sl ?? p-40 } as any])
+  }
+  const handleSell=()=>{
+    const p = orderType==='Market' ? (currentBar?.close ?? 28991) : limitPrice
+    if(orderType!=='Market'){ setOrders(o=>[...o,{ id:Math.random().toString(36).slice(2), side:'short', type:orderType, price:p, qty:contracts }]); return }
+    const tp = tpEnabled ? p - tpTicks*0.25 : undefined
+    const sl = slEnabled ? p + slTicks*0.25 : undefined
+    setPosition({ side:'short', qty:contracts, entry:p })
+    if(tp||sl) setDrawings(d=>[...d, { id:Math.random().toString(36).slice(2), type:'short', entry:p, tp: tp ?? p-80, sl: sl ?? p+40 } as any])
+  }
+  const handleClose=()=>{
+    if(!position||!currentBar) return
+    const pnl = (position.side==='long' ? currentBar.close - position.entry : position.entry - currentBar.close) * position.qty * 2 // $2 per point
+    setRealized(r=>r+pnl); setEquity(e=>e+pnl); setPosition(null)
+  }
 
   // map Nami tool ids to Chart ids
   const mapTool=(id:string)=>{
@@ -101,9 +145,6 @@ export default function App() {
     if(['xabcd','cypher','headShoulders','abcd','trianglePattern','threeDrives','elliottImpulse','elliottCorrection','elliottTriangle','elliottDouble','elliottTriple'].includes(id)) return 'trend'
     return id
   }
-
-  const currentBar = bars[cursor]
-  const tfLabel = TIMEFRAMES.find(t=>t.s===timeframe)?.label ?? `${timeframe/60}m`
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', background: '#0a0a0b' }}>
@@ -166,13 +207,15 @@ export default function App() {
               </div>
             </div>
             <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+              <button onClick={()=>setBottomOpen(v=>!v)} style={{ background: bottomOpen?'#fff':'#1a1a1e', border:'none', color: bottomOpen?'#000':'#a1a1aa', padding:'4px 8px', borderRadius:6, fontSize:11 }}>{bottomOpen?'▼':'▲'} {bottomOpen?'Hide':'Show'} panel</button>
               <button style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 8px', borderRadius:6, fontSize:11 }}>♡ Bookmarks</button>
               <span style={{ fontFamily:'monospace', color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6, fontSize:11 }}>{currentBar? new Date(currentBar.time*1000).toLocaleString('en-US',{ month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'America/New_York'})+' ET':''} — 09:42</span>
             </div>
           </div>
+          <BottomPanel open={bottomOpen} height={bottomHeight} setHeight={setBottomHeight} setOpen={setBottomOpen} />
         </div>
 
-        {showPanels && <RightPanel price={currentBar?.close} settingsOpen={()=>setShowSettings(true)} />}
+        {showPanels && <RightPanel price={currentBar?.close} contracts={contracts} setContracts={setContracts} orderType={orderType} setOrderType={setOrderType} limitPrice={limitPrice} setLimitPrice={setLimitPrice} tpEnabled={tpEnabled} setTpEnabled={setTpEnabled} tpTicks={tpTicks} setTpTicks={setTpTicks} slEnabled={slEnabled} setSlEnabled={setSlEnabled} slTicks={slTicks} setSlTicks={setSlTicks} riskPct={riskPct} setRiskPct={setRiskPct} position={position} orders={orders} onBuy={handleBuy} onSell={handleSell} onClose={handleClose} equity={equity} realized={realized} />}
       </div>
 
       <SettingsModal open={showSettings} onClose={()=>setShowSettings(false)} settings={settings} onChange={setSettings} />
