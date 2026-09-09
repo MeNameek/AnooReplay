@@ -4,7 +4,7 @@ type Position = { side:'long'|'short'; qty:number; entry:number; tp?:number; sl?
 type Order = { id:string; side:'long'|'short'; type:'Market'|'Limit'|'Stop'; price:number; tp?:number; sl?:number; qty:number }
 
 type Props = {
-  price: number
+  price?: number
   contracts: number
   setContracts: (n:number)=>void
   orderType: 'Market'|'Limit'|'Stop'
@@ -24,10 +24,11 @@ type Props = {
 }
 
 export default function RightPanel({ price, contracts, setContracts, orderType, setOrderType, limitPrice, setLimitPrice, tpEnabled, setTpEnabled, tpTicks, setTpTicks, slEnabled, setSlEnabled, slTicks, setSlTicks, riskPct, setRiskPct, position, orders, onBuy, onSell, onClose, equity, realized }: Props) {
+  const p = price ?? limitPrice ?? 28991
   const tickVal = 0.50
   const tickSize = 0.25
   const pointValue = 2 // $2 per point for MNQ
-  const tradeValue = (contracts * price * pointValue).toLocaleString('en-US', { style:'currency', currency:'USD' })
+  const tradeValue = (contracts * p * pointValue).toLocaleString('en-US', { style:'currency', currency:'USD' })
   const isSellActive = false // price direction? keep neutral
   return (
     <div style={{ width:280, background:'#0a0a0b', borderLeft:'1px solid #1a1a1e', display:'flex', flexDirection:'column', overflowY:'auto', fontFamily:'Inter, system-ui, -apple-system', fontSize:11 }}>
@@ -40,12 +41,12 @@ export default function RightPanel({ price, contracts, setContracts, orderType, 
       <div style={{ margin:'10px 12px', display:'flex', gap:8 }}>
         <button onClick={onSell} style={{ flex:1, background: isSellActive ? '#EF4444' : '#1a1a1e', border:'none', borderRadius:8, padding:'8px 10px', textAlign:'left', cursor:'pointer' }}>
           <div style={{ fontSize:9, letterSpacing:1, color: isSellActive ? '#fff' : '#71717a', fontWeight:700 }}>SELL</div>
-          <div style={{ fontSize:13, color: isSellActive ? '#fff' : '#e5e7eb', fontWeight:700 }}>{price.toFixed(2)}</div>
+          <div style={{ fontSize:13, color: isSellActive ? '#fff' : '#e5e7eb', fontWeight:700 }}>{p.toFixed(2)}</div>
         </button>
         <div style={{ position:'relative', flex:1 }}>
           <button onClick={onBuy} style={{ width:'100%', background:'#fff', border:'none', borderRadius:8, padding:'8px 10px', textAlign:'right', cursor:'pointer' }}>
             <div style={{ fontSize:9, letterSpacing:1, color:'#71717a', fontWeight:700, textAlign:'right' }}>BUY</div>
-            <div style={{ fontSize:13, color:'#000', fontWeight:700, textAlign:'right' }}>{price.toFixed(2)}</div>
+            <div style={{ fontSize:13, color:'#000', fontWeight:700, textAlign:'right' }}>{p.toFixed(2)}</div>
           </button>
           <div style={{ position:'absolute', left:-10, top:'50%', transform:'translateY(-50%)', background:'#fff', color:'#000', fontSize:9, fontWeight:700, padding:'2px 5px', borderRadius:6, border:'1px solid #27272a' }}>0.25</div>
         </div>
@@ -63,7 +64,7 @@ export default function RightPanel({ price, contracts, setContracts, orderType, 
         <button onClick={()=>setContracts(Math.max(1,contracts-1))} style={{ width:28,height:28,borderRadius:6,border:'none',background:'#1a1a1e',color:'#fff' }}>−</button>
         <input value={contracts} onChange={e=> setContracts(Math.max(1, parseInt(e.target.value)||1))} style={{ flex:1, background:'#1a1a1e', border:'1px solid #27272a', borderRadius:6, padding:'6px 0', textAlign:'center', color:'#fff', fontSize:12 }} />
         <button onClick={()=>setContracts(contracts+1)} style={{ width:28,height:28,borderRadius:6,border:'none',background:'#1a1a1e',color:'#fff' }}>+</button>
-        {orderType!=='Market' && <input type="number" value={limitPrice} onChange={e=> setLimitPrice(parseFloat(e.target.value)||price)} style={{ width:86, background:'#1a1a1e', border:'1px solid #27272a', color:'#fff', borderRadius:6, padding:'6px 6px', fontSize:11 }} />}
+        {orderType!=='Market' && <input type="number" value={Number.isFinite(limitPrice)?limitPrice:p} onChange={e=> setLimitPrice(parseFloat(e.target.value)||p)} style={{ width:86, background:'#1a1a1e', border:'1px solid #27272a', color:'#fff', borderRadius:6, padding:'6px 6px', fontSize:11 }} />}
       </div>
 
       <div style={{ margin:'8px 12px', background:'#111114', border:'1px solid #1a1a1e', borderRadius:10, padding:8 }}>
@@ -100,7 +101,7 @@ export default function RightPanel({ price, contracts, setContracts, orderType, 
         <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, padding:'3px 0', color:'#71717a' }}><span>Equity</span><span style={{ color:'#fff', fontWeight:600 }}>${equity.toLocaleString()}</span></div>
         <div style={{ height:1, background:'#1a1a1e', margin:'8px 0' }} />
         <button onClick={position? onClose : onBuy} style={{ width:'100%', background: position ? '#1a1a1e' : '#fff', color: position ? '#fff' : '#000', border:'1px solid #27272a', borderRadius:10, padding:'10px 0', fontWeight:700, fontSize:12 }}>
-          {position ? `Close ${position.side} ${position.qty}` : `Buy ${contracts} MNQ`} <div style={{ fontSize:9, fontWeight:400, opacity:0.6 }}>{orderType} {orderType!=='Market' ? `@ ${limitPrice.toFixed(2)}` : 'MARKET'}</div>
+          {position ? `Close ${position.side} ${position.qty}` : `Buy ${contracts} MNQ`} <div style={{ fontSize:9, fontWeight:400, opacity:0.6 }}>{orderType} {orderType!=='Market' ? `@ ${(Number.isFinite(limitPrice)?limitPrice:p).toFixed(2)}` : 'MARKET'}</div>
         </button>
         {!position && <button onClick={onSell} style={{ width:'100%', marginTop:6, background:'#ef4444', color:'#fff', border:'none', borderRadius:10, padding:'8px 0', fontWeight:700, fontSize:11 }}>Sell {contracts} MNQ MARKET</button>}
       </div>
@@ -109,7 +110,7 @@ export default function RightPanel({ price, contracts, setContracts, orderType, 
         <div style={{ fontSize:10, letterSpacing:1, color:'#71717a', fontWeight:700 }}>POSITION</div>
         {position ? <div style={{ marginTop:6, background:'#0f172a', border:'1px solid #1e40af', borderRadius:8, padding:8 }}>
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:11 }}><span style={{ color:'#60a5fa', fontWeight:700 }}>{position.side.toUpperCase()} {position.qty}</span><span style={{ color:'#a1a1aa' }}>@ {position.entry.toFixed(2)}</span></div>
-          <div style={{ fontSize:11, color: (price - position.entry)*(position.side==='long'?1:-1) >=0 ? '#10b981' : '#ef4444', fontWeight:700, marginTop:4 }}>{((price - position.entry)*(position.side==='long'?1:-1)*contracts*pointValue).toFixed(2)} USD</div>
+          <div style={{ fontSize:11, color: (p - position.entry)*(position.side==='long'?1:-1) >=0 ? '#10b981' : '#ef4444', fontWeight:700, marginTop:4 }}>{((p - position.entry)*(position.side==='long'?1:-1)*contracts*pointValue).toFixed(2)} USD</div>
         </div> : <div style={{ fontSize:11, color:'#52525b', marginTop:4 }}>Flat</div>}
       </div>
       <div style={{ margin:'0 12px', padding:'8px 0', borderTop:'1px solid #1a1a1e' }}>
