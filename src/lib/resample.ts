@@ -37,4 +37,6 @@ export const TIMEFRAMES = [
   { label: '2H', s: 7200 },
   { label: '4H', s: 14400 },
   { label: '1D', s: 86400 },
+  { label: '1W', s: 604800 },
+  { label: '1M', s: 2592000 },
 ] as const

@@ -7,6 +7,8 @@ import { resample, TIMEFRAMES, type Bar } from './lib/resample'
 import type { Drawing } from './lib/types'
 import { defaultFavorites } from './lib/tools'
 import { DEFAULT_SETTINGS, type ChartSettings } from './lib/settings'
+import TimeframePicker from './components/TimeframePicker'
+import QuickSwitch from './components/QuickSwitch'
 
 const SPEED_OPTIONS = [0.5, 1, 2, 5, 10]
 
@@ -101,26 +103,32 @@ export default function App() {
   const tfLabel = TIMEFRAMES.find(t=>t.s===timeframe)?.label ?? `${timeframe/60}m`
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background: settings.background }}>
-      <div style={{ height:38, display:'flex', alignItems:'center', gap:6, padding:'0 10px', borderBottom:'1px solid #1a1a1a', background:'#0a0a0a', overflowX:'auto' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background: '#0a0a0b' }}>
+      <QuickSwitch onSwitch={setTimeframe} />
+      <div style={{ height:36, display:'flex', alignItems:'center', gap:6, padding:'0 8px', borderBottom:'1px solid #1a1a1e', background:'#0a0a0b', overflowX:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:700 }}>
-          <span style={{ background:'#1a1a1a', padding:'2px 6px', borderRadius:4, fontFamily:'monospace' }}>NQ1!</span>
-          <span style={{ color:'#71717a', fontSize:11 }}>Micro E-mini Nasdaq-100</span>
+          <span style={{ background:'#1a1a1e', padding:'2px 6px', borderRadius:6, fontFamily:'monospace', color:'#fff', fontSize:11, display:'flex', alignItems:'center', gap:4 }}>∼ MNQ1! <span style={{ background:'#27272a', padding:'0 4px', borderRadius:4, fontSize:9 }}>/</span></span>
+          <span style={{ color:'#71717a', fontSize:11, background:'#1a1a1e', padding:'2px 6px', borderRadius:6 }}>● EVAL · Exit</span>
+          <button style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', width:22, height:22, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
         </div>
-        <div style={{ width:1, height:16, background:'#1a1a1a' }} />
-        <div style={{ display:'flex', gap:4 }}>{TIMEFRAMES.map(tf=> <button key={tf.s} onClick={()=>setTimeframe(tf.s)} style={{ padding:'3px 7px', borderRadius:6, fontSize:11, fontFamily:'monospace', background: timeframe===tf.s?'#2962ff':'#1a1a1a', color: timeframe===tf.s?'#fff':'#a1a1aa', border:'none' }}>{tf.label}</button>)}</div>
-        <div style={{ width:1, height:16, background:'#1a1a1a' }} />
-        <button onClick={()=>setCursor(bars.length-1)} style={{ fontSize:11, color:'#a1a1aa', background:'#1a1a1a', border:'none', padding:'3px 8px', borderRadius:6 }}>To latest</button>
-        <button onClick={()=>{ const v=prompt('Go to date YYYY-MM-DD', selectedDate); if(v&&availableDates.includes(v)) goToDate(v) }} style={{ fontSize:11, color:'#a1a1aa', background:'#1a1a1a', border:'none', padding:'3px 8px', borderRadius:6 }}>Go to</button>
-        <div style={{ display:'flex', gap:2, marginLeft:6 }}>
-          <button onClick={()=>jumpDays(-1)} style={{ background:'#1a1a1a', border:'none', color:'#a1a1aa', padding:'4px 6px', borderRadius:6 }}>←</button>
-          <button onClick={()=>jumpDays(1)} style={{ background:'#1a1a1a', border:'none', color:'#a1a1aa', padding:'4px 6px', borderRadius:6 }}>→</button>
+        <div style={{ width:1, height:16, background:'#1a1a1e' }} />
+        <TimeframePicker seconds={timeframe} onSelect={setTimeframe} />
+        <div style={{ display:'flex', alignItems:'center', gap:2, background:'#1a1a1e', padding:'2px 4px', borderRadius:6 }}>
+          <span style={{ fontSize:10, color:'#71717a' }}>◍</span><span style={{ fontSize:11, color:'#a1a1aa' }}>Indicators</span>
         </div>
-        <input type="date" value={selectedDate} onChange={e=>goToDate(e.target.value)} min={availableDates[0]} max={availableDates[availableDates.length-1]} style={{ marginLeft:6, background:'#1a1a1a', border:'1px solid #27272a', color:'#e5e5e5', borderRadius:6, padding:'3px 6px', fontSize:11 }} />
+        <div style={{ display:'flex', alignItems:'center', gap:4, marginLeft:4 }}>
+          <span style={{ fontSize:11, color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6, display:'flex', alignItems:'center', gap:4 }}>📅 ≫ To latest</span>
+          <span style={{ fontSize:11, color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6 }}>↷ Go to</span>
+          <span style={{ display:'flex', gap:2 }}><button onClick={()=>jumpDays(-1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'3px 6px', borderRadius:6 }}>←</button><button onClick={()=>jumpDays(1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'3px 6px', borderRadius:6 }}>→</button></span>
+        </div>
+        <input type="date" value={selectedDate} onChange={e=>goToDate(e.target.value)} min={availableDates[0]} max={availableDates[availableDates.length-1]} style={{ marginLeft:6, background:'#1a1a1e', border:'1px solid #27272a', color:'#e5e5e5', borderRadius:6, padding:'3px 6px', fontSize:11, height:22 }} />
         <div style={{ flex:1 }} />
-        <button onClick={()=>setShowSettings(true)} title="Settings" style={{ background:'#1a1a1a', border:'none', color:'#a1a1aa', padding:'4px 8px', borderRadius:6 }}>⚙</button>
-        {currentBar && <div style={{ fontFamily:'monospace', fontSize:11, color: currentBar.close>=currentBar.open?'#26a69a':'#ef5350' }}>{currentBar.close.toFixed(2)} {currentBar.close>=currentBar.open?'↗':'↘'}</div>}
-        <label style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, color:'#a1a1aa' }}><input type="checkbox" checked={replayMode} onChange={e=>setReplayMode(e.target.checked)} /> Replay</label>
+        <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+          <button onClick={()=>setShowSettings(true)} title="Settings" style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 8px', borderRadius:6 }}>⚙</button>
+          {currentBar && <div style={{ fontFamily:'monospace', fontSize:11, color:'#fff', background:'#1a1a1e', padding:'3px 6px', borderRadius:6 }}>{currentBar.close.toFixed(2)} <span style={{ color: currentBar.close>=currentBar.open?'#26a69a':'#ef5350' }}>{currentBar.close>=currentBar.open?'+0.11%':'-0.11%'}</span></div>}
+          <label style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6 }}><input type="checkbox" checked={replayMode} onChange={e=>setReplayMode(e.target.checked)} /> Replay</label>
+          <button style={{ background:'#fff', color:'#000', padding:'4px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:700 }}>Journal</button>
+        </div>
       </div>
 
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
@@ -134,19 +142,29 @@ export default function App() {
             {settings.detachableToolbars && <FavoriteWidget favorites={favorites} activeTool={activeTool} onSelect={id=>setActiveTool(id)} onRemove={toggleFav} />}
           </div>}
 
-          <div style={{ height:34, display:'flex', alignItems:'center', gap:6, padding:'0 8px', borderTop:'1px solid #1a1a1a', background:'#0a0a0a', fontSize:11 }}>
-            <button onClick={()=>setCursor(0)} style={{ background:'#1a1a1a', border:'none', color:'#a1a1aa', padding:'4px 7px', borderRadius:6 }}>⏮</button>
-            <button onClick={()=>step(-1)} style={{ background:'#1a1a1a', border:'none', color:'#a1a1aa', padding:'4px 7px', borderRadius:6 }}>◀</button>
-            <button onClick={()=>setIsPlaying(v=>!v)} style={{ background:isPlaying?'#2962ff':'#1a1a1a', border:'none', color:isPlaying?'#fff':'#a1a1aa', padding:'4px 10px', borderRadius:6, minWidth:48 }}>{isPlaying?'⏸':'▶'}</button>
-            <button onClick={()=>step(1)} style={{ background:'#1a1a1a', border:'none', color:'#a1a1aa', padding:'4px 7px', borderRadius:6 }}>▶</button>
-            <button onClick={()=>setCursor(bars.length-1)} style={{ background:'#1a1a1a', border:'none', color:'#a1a1aa', padding:'4px 7px', borderRadius:6 }}>⏭</button>
-            <div style={{ width:1, height:16, background:'#1a1a1a' }} />
-            <div style={{ display:'flex', gap:2 }}>{SPEED_OPTIONS.map(s=> <button key={s} onClick={()=>setSpeed(s)} style={{ padding:'2px 6px', borderRadius:6, border:'none', background:speed===s?'#2962ff':'#1a1a1a', color:speed===s?'#fff':'#a1a1aa', fontFamily:'monospace', fontSize:11 }}>{s}x</button>)}</div>
-            <div style={{ flex:1, height:3, background:'#1a1a1a', borderRadius:2, position:'relative', margin:'0 6px', cursor:'pointer' }} onClick={e=>{ const r=(e.currentTarget as HTMLDivElement).getBoundingClientRect(); const pct=(e.clientX-r.left)/r.width; setIsPlaying(false); setCursor(Math.floor(pct*(bars.length-1))) }}>
-              <div style={{ width:`${bars.length?(cursor/(bars.length-1))*100:0}%`, height:'100%', background:'#2962ff', borderRadius:2 }} />
+          <div style={{ height:36, display:'flex', alignItems:'center', gap:6, padding:'0 8px', borderTop:'1px solid #1a1a1e', background:'#0a0a0b', fontSize:11, position:'relative' }}>
+            {/* bottom pills like Image 1: 30s 1m 3m... */}
+            <div style={{ display:'flex', gap:2, background:'#1a1a1e', padding:2, borderRadius:8 }}>
+              {[
+                { l:'30s', s:30 }, { l:'1m', s:60 }, { l:'3m', s:180 }, { l:'5m', s:300 }, { l:'15m', s:900 }, { l:'30m', s:1800 }, { l:'1H', s:3600 }, { l:'4H', s:14400 }, { l:'1D', s:86400 },
+              ].map(o=> <button key={o.s} onClick={()=>setTimeframe(o.s)} style={{ padding:'4px 6px', borderRadius:6, fontSize:11, fontFamily:'monospace', background: timeframe===o.s ? '#fff' : 'transparent', color: timeframe===o.s ? '#000' : '#a1a1aa', border:'none', fontWeight: timeframe===o.s?700:400 }}>{o.l}</button>)}
+              <button style={{ padding:'3px 6px', borderRadius:6, background:'transparent', border:'none', color:'#71717a' }}>▦</button>
             </div>
-            <div style={{ fontFamily:'monospace', color:'#a1a1aa', minWidth:200, textAlign:'right' }}>{currentBar? new Date(currentBar.time*1000).toLocaleString('en-US',{ month:'short', day:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false, timeZone:'America/New_York'})+' ET':''} · {cursor+1}/{bars.length}</div>
-            <div style={{ fontFamily:'monospace', fontSize:10, color:'#71717a', background:'#1a1a1a', padding:'2px 6px', borderRadius:4 }}>{tfLabel}</div>
+            <button style={{ marginLeft:6, background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 6px', borderRadius:6, fontSize:11 }}>📅</button>
+            <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+              <button onClick={()=>step(-1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 8px', borderRadius:6 }}>◀</button>
+              <button onClick={()=>setIsPlaying(v=>!v)} style={{ background:isPlaying?'#fff':'#1a1a1e', border:'none', color:isPlaying?'#000':'#a1a1aa', padding:'4px 10px', borderRadius:6 }}>{isPlaying?'⏸':'▶'}</button>
+              <button onClick={()=>step(1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 8px', borderRadius:6 }}>▶</button>
+              <span style={{ color:'#71717a', margin:'0 6px' }}>≫</span>
+              <div style={{ display:'flex', gap:2, alignItems:'center' }}>{SPEED_OPTIONS.slice(0,4).map(s=> <button key={s} onClick={()=>setSpeed(s)} style={{ padding:'2px 6px', borderRadius:6, border:'none', background: speed===s?'#fff':'#1a1a1e', color: speed===s?'#000':'#a1a1aa', fontFamily:'monospace', fontSize:11 }}>{s}x</button>)}<span style={{ background:'#1a1a1e', color:'#a1a1aa', padding:'2px 6px', borderRadius:6, fontFamily:'monospace' }}>{speed}x ▾</span></div>
+              <div style={{ display:'flex', alignItems:'center', gap:2, marginLeft:8, background:'#1a1a1e', padding:'2px 6px', borderRadius:6 }}>
+                <span style={{ color:'#fff', fontSize:11 }}>{tfLabel} ▾</span>
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+              <button style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 8px', borderRadius:6, fontSize:11 }}>♡ Bookmarks</button>
+              <span style={{ fontFamily:'monospace', color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6, fontSize:11 }}>{currentBar? new Date(currentBar.time*1000).toLocaleString('en-US',{ month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'America/New_York'})+' ET':''} — 09:42</span>
+            </div>
           </div>
         </div>
 
