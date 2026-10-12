@@ -28,9 +28,11 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
   const volRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const [pending, setPending] = useState<any>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; price: number | null } | null>(null)
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null)
   const isInitialRef = useRef(true)
   const prevBarsRef = useRef<Bar[]>([])
   const prevDateKeyRef = useRef<string | undefined>(undefined)
+  const svgRef = useRef<SVGSVGElement>(null)
 
   // create chart once — Nami-like thicker candles (≈ image 1 is fatter than our thin image 2)
   useEffect(() => {
@@ -232,7 +234,6 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
 
   const overlay = (() => {
     if (!chartRef.current || !candleRef.current || bars.length === 0) return null
-    // force re-render on overlayKey
     void overlayKey
     const els: JSX.Element[] = []
     for (const d of drawings) {
@@ -242,20 +243,14 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
         if (topY == null || botY == null) continue
         const y = Math.min(topY, botY)
         const h = Math.abs(botY - topY)
-        els.push(
-          <div key={d.id} style={{ position: 'absolute', left: 0, right: 40, top: y, height: Math.max(2, h), background: d.fill, border: `1px solid ${d.color}`, pointerEvents: 'none' }} />
-        )
+        els.push(<rect key={d.id} x={0} y={y} width="100%" height={Math.max(1, h)} fill={d.fill} stroke={d.color} strokeWidth={1} />)
       } else if (d.type === 'trend') {
         const x1 = chartRef.current.timeScale().timeToCoordinate(d.p1.time as any)
         const x2 = chartRef.current.timeScale().timeToCoordinate(d.p2.time as any)
         const y1 = candleRef.current.priceToCoordinate(d.p1.price)
         const y2 = candleRef.current.priceToCoordinate(d.p2.price)
         if (x1 == null || x2 == null || y1 == null || y2 == null) continue
-        els.push(
-          <svg key={d.id} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} width="100%" height="100%">
-            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={d.color} strokeWidth={2} />
-          </svg>
-        )
+        els.push(<line key={d.id} x1={x1} y1={y1} x2={x2} y2={y2} stroke={d.color} strokeWidth={2} />)
       } else if (d.type === 'fib') {
         const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
         const high = Math.max(d.p1.price, d.p2.price)
@@ -265,11 +260,7 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
           const price = low + range * lvl
           const y = candleRef.current.priceToCoordinate(price)
           if (y == null) continue
-          els.push(
-            <div key={d.id + '-' + lvl} style={{ position: 'absolute', left: 0, right: 0, top: y, height: 0, borderTop: '1px dashed #a78bfa', pointerEvents: 'none' }}>
-              <span style={{ position: 'absolute', right: 46, top: -8, fontSize: 10, fontFamily: 'monospace', color: '#a78bfa', background: '#0a0a0a', padding: '0 4px' }}>{(lvl * 100).toFixed(1)}% {price.toFixed(2)}</span>
-            </div>
-          )
+          els.push(<line key={d.id + '-' + lvl} x1={0} x2="100%" y1={y} y2={y} stroke="#a78bfa" strokeWidth={1} strokeDasharray="2 4" />)
         }
       } else if (d.type === 'long' || d.type === 'short') {
         const isLong = d.type === 'long'
@@ -277,24 +268,29 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
         const slY = candleRef.current.priceToCoordinate(d.sl)
         const tpY = candleRef.current.priceToCoordinate(d.tp)
         if (entryY == null || slY == null || tpY == null) continue
-        const top = Math.min(entryY, tpY)
-        const bot = Math.max(entryY, slY)
-        // entry line + boxes: reuse priceLines for labels, overlay for boxes
-        const boxTopH = Math.abs(tpY - entryY)
-        const boxBotH = Math.abs(slY - entryY)
         els.push(
-          <div key={d.id + 'tp'} style={{ position: 'absolute', left: 0, right: 40, top: isLong ? tpY : entryY, height: boxTopH, background: 'rgba(38,166,154,0.18)', border: '1px solid rgba(38,166,154,0.6)', pointerEvents: 'none' }} />,
-          <div key={d.id + 'sl'} style={{ position: 'absolute', left: 0, right: 40, top: isLong ? entryY : slY, height: boxBotH, background: 'rgba(239,83,80,0.18)', border: '1px solid rgba(239,83,80,0.6)', pointerEvents: 'none' }} />,
-          <div key={d.id + 'entry'} style={{ position: 'absolute', left: 0, right: 0, top: entryY, height: 0, borderTop: `2px solid ${isLong ? '#26a69a' : '#ef5350'}`, pointerEvents: 'none' }} />
+          <rect key={d.id + 'tp'} x={0} y={isLong ? tpY : entryY} width="100%" height={Math.abs(tpY - entryY)} fill="rgba(38,166,154,0.18)" stroke="rgba(38,166,154,0.6)" strokeWidth={1} />,
+          <rect key={d.id + 'sl'} x={0} y={isLong ? entryY : slY} width="100%" height={Math.abs(slY - entryY)} fill="rgba(239,83,80,0.18)" stroke="rgba(239,83,80,0.6)" strokeWidth={1} />,
+          <line key={d.id + 'entry'} x1={0} x2="100%" y1={entryY} y2={entryY} stroke={isLong ? '#26a69a' : '#ef5350'} strokeWidth={2} />
         )
       } else if (d.type === 'hline') {
         const y = candleRef.current.priceToCoordinate(d.price)
         if (y == null) continue
-        els.push(<div key={d.id} style={{ position: 'absolute', left: 0, right: 0, top: y, borderTop: `1px solid ${d.color}`, pointerEvents: 'none' }} />)
+        els.push(<line key={d.id} x1={0} x2="100%" y1={y} y2={y} stroke={d.color} strokeWidth={1} />)
       }
     }
     return els
   })()
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!wrapRef.current) return
+    const rect = wrapRef.current.getBoundingClientRect()
+    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+  }, [])
+
+  const handleMouseLeave = useCallback(() => {
+    setMousePos(null)
+  }, [])
 
   const handleContext = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -306,10 +302,54 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
   }
   const doReset = () => { if (chartRef.current) { chartRef.current.timeScale().fitContent(); chartRef.current.timeScale().applyOptions({ barSpacing: 9, rightOffset: 10 }); const len = (replayMode ? bars.slice(0, cursor+1) : bars).length; const show=110; chartRef.current.timeScale().setVisibleLogicalRange({ from: Math.max(0,len-show), to: len }); } onResetView?.() }
 
+  const pendingDrawing = (() => {
+    if (!pending || !mousePos || !candleRef.current || !chartRef.current) return null
+    const price = candleRef.current.coordinateToPrice(mousePos.y)
+    if (price == null) return null
+    const time = chartRef.current.timeScale().coordinateToTime(mousePos.x) as number | null
+
+    if (pending.type === 'rect') {
+      const topY = candleRef.current.priceToCoordinate(pending.top)
+      const botY = candleRef.current.priceToCoordinate(price)
+      if (topY == null || botY == null) return null
+      const y = Math.min(topY, botY)
+      const h = Math.abs(botY - topY)
+      return <rect x={0} y={y} width="100%" height={Math.max(1, h)} fill="rgba(41,98,255,0.1)" stroke="#2962ff" strokeWidth={1} strokeDasharray="4 2" />
+    } else if (pending.type === 'trend' || pending.type === 'fib') {
+      const x1 = chartRef.current.timeScale().timeToCoordinate(pending.p1.time as any)
+      const x2 = mousePos.x
+      const y1 = candleRef.current.priceToCoordinate(pending.p1.price)
+      const y2 = mousePos.y
+      if (x1 == null || y1 == null) return null
+      if (pending.type === 'trend') {
+        return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#2962ff" strokeWidth={2} strokeDasharray="4 2" />
+      } else {
+        const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
+        const high = Math.max(pending.p1.price, price)
+        const low = Math.min(pending.p1.price, price)
+        const range = high - low || 1
+        return (
+          <g>
+            {levels.map(lvl => {
+              const p = low + range * lvl
+              const yy = candleRef.current!.priceToCoordinate(p)
+              if (yy == null) return null
+              return <line key={lvl} x1={0} x2="100%" y1={yy} y2={yy} stroke="#a78bfa" strokeWidth={1} strokeDasharray="2 4" />
+            })}
+          </g>
+        )
+      }
+    }
+    return null
+  })()
+
   return (
-    <div ref={wrapRef} onClick={handleChartClick} onContextMenu={handleContext} style={{ width: '100%', height: '100%', position: 'relative', cursor: activeTool && activeTool !== 'cursor' ? 'crosshair' : 'default' }}>
-      <div style={{ position: 'absolute', inset: 0 }}>{overlay}</div>
-      {pending && <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(41,98,255,0.15)', border: '1px solid #2962ff', color: '#2962ff', fontSize: 11, padding: '4px 8px', borderRadius: 6, pointerEvents: 'none' }}>Click to set second point — {pending.type}</div>}
+    <div ref={wrapRef} onClick={handleChartClick} onContextMenu={handleContext} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} style={{ width: '100%', height: '100%', position: 'relative', cursor: activeTool && activeTool !== 'cursor' ? 'crosshair' : 'default' }}>
+      <svg ref={svgRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} width="100%" height="100%">
+        {overlay}
+        {pendingDrawing}
+      </svg>
+      {pending && <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(41,98,255,0.15)', border: '1px solid #2962ff', color: '#2962ff', fontSize: 11, padding: '4px 8px', borderRadius: 6, pointerEvents: 'none', whiteSpace:'nowrap' }}>Click to set {pending.type === 'rect' ? 'bottom' : 'second point'}</div>}
       {menu && (
         <ContextMenu
           x={menu.x} y={menu.y} price={menu.price}

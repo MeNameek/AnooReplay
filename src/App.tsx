@@ -11,6 +11,7 @@ import TimeframePicker from './components/TimeframePicker'
 import QuickSwitch from './components/QuickSwitch'
 import RightPanel from './components/RightPanel'
 import BottomPanel from './components/BottomPanel'
+import GoToDropdown from './components/GoToDropdown'
 
 const SPEED_OPTIONS = [0.5, 1, 2, 5, 10]
 
@@ -50,7 +51,10 @@ export default function App() {
   const [orders, setOrders] = useState<any[]>([])
   const [equity, setEquity] = useState(51548)
   const [realized, setRealized] = useState(1548)
+  const [orderSide, setOrderSide] = useState<'long'|'short'>('long')
   const timerRef = useRef<number | null>(null)
+  const rawBarsRef = useRef<Bar[]>(rawBars)
+  useEffect(() => { rawBarsRef.current = rawBars }, [rawBars])
 
   useEffect(() => { localStorage.setItem('ano:favs', JSON.stringify(favorites)) }, [favorites])
   useEffect(() => { localStorage.setItem('ano:settings', JSON.stringify(settings)) }, [settings])
@@ -152,7 +156,6 @@ export default function App() {
       <div style={{ height:36, display:'flex', alignItems:'center', gap:6, padding:'0 8px', borderBottom:'1px solid #1a1a1e', background:'#0a0a0b', overflowX:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:700 }}>
           <span style={{ background:'#1a1a1e', padding:'2px 6px', borderRadius:6, fontFamily:'monospace', color:'#fff', fontSize:11, display:'flex', alignItems:'center', gap:4 }}>∼ MNQ1! <span style={{ background:'#27272a', padding:'0 4px', borderRadius:4, fontSize:9 }}>/</span></span>
-          <span style={{ color:'#71717a', fontSize:11, background:'#1a1a1e', padding:'2px 6px', borderRadius:6 }}>● EVAL · Exit</span>
           <button style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', width:22, height:22, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
         </div>
         <div style={{ width:1, height:16, background:'#1a1a1e' }} />
@@ -160,11 +163,8 @@ export default function App() {
         <button onClick={()=> alert('Indicators — TradingView indicators coming soon (SMA/EMA/VWAP placeholder)')} style={{ display:'flex', alignItems:'center', gap:4, background:'#1a1a1e', border:'1px solid #27272a', color:'#a1a1aa', padding:'3px 8px', borderRadius:6, fontSize:11 }}>
           <span>◍</span> Indicators <span style={{ opacity:0.5 }}>▾</span>
         </button>
-        <div style={{ display:'flex', alignItems:'center', gap:4, marginLeft:4 }}>
-          <span style={{ fontSize:11, color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6, display:'flex', alignItems:'center', gap:4 }}>📅 ≫ To latest</span>
-          <span style={{ fontSize:11, color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6 }}>↷ Go to</span>
-          <span style={{ display:'flex', gap:2 }}><button onClick={()=>jumpDays(-1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'3px 6px', borderRadius:6 }}>←</button><button onClick={()=>jumpDays(1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'3px 6px', borderRadius:6 }}>→</button></span>
-        </div>
+        <GoToDropdown rawBars={rawBars} cursor={cursor} setCursor={setCursor} />
+        <span style={{ display:'flex', gap:2 }}><button onClick={()=>jumpDays(-1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'3px 6px', borderRadius:6 }}>←</button><button onClick={()=>jumpDays(1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'3px 6px', borderRadius:6 }}>→</button></span>
         <input type="date" value={selectedDate} onChange={e=>goToDate(e.target.value)} min={availableDates[0]} max={availableDates[availableDates.length-1]} style={{ marginLeft:6, background:'#1a1a1e', border:'1px solid #27272a', color:'#e5e5e5', borderRadius:6, padding:'3px 6px', fontSize:11, height:22 }} />
         <div style={{ flex:1 }} />
         <div style={{ display:'flex', gap:4, alignItems:'center' }}>
@@ -215,7 +215,7 @@ export default function App() {
           <BottomPanel open={bottomOpen} height={bottomHeight} setHeight={setBottomHeight} setOpen={setBottomOpen} />
         </div>
 
-        {showPanels && <RightPanel price={currentBar?.close} contracts={contracts} setContracts={setContracts} orderType={orderType} setOrderType={setOrderType} limitPrice={limitPrice} setLimitPrice={setLimitPrice} tpEnabled={tpEnabled} setTpEnabled={setTpEnabled} tpTicks={tpTicks} setTpTicks={setTpTicks} slEnabled={slEnabled} setSlEnabled={setSlEnabled} slTicks={slTicks} setSlTicks={setSlTicks} riskPct={riskPct} setRiskPct={setRiskPct} position={position} orders={orders} onBuy={handleBuy} onSell={handleSell} onClose={handleClose} equity={equity} realized={realized} />}
+        {showPanels && <RightPanel price={currentBar?.close} contracts={contracts} setContracts={setContracts} orderType={orderType} setOrderType={setOrderType} limitPrice={limitPrice} setLimitPrice={setLimitPrice} tpEnabled={tpEnabled} setTpEnabled={setTpEnabled} tpTicks={tpTicks} setTpTicks={setTpTicks} slEnabled={slEnabled} setSlEnabled={setSlEnabled} slTicks={slTicks} setSlTicks={setSlTicks} riskPct={riskPct} setRiskPct={setRiskPct} position={position} orders={orders} onBuy={handleBuy} onSell={handleSell} onClose={handleClose} equity={equity} realized={realized} orderSide={orderSide} setOrderSide={setOrderSide} />}
       </div>
 
       <SettingsModal open={showSettings} onClose={()=>setShowSettings(false)} settings={settings} onChange={setSettings} />
