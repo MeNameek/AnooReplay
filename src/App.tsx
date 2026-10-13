@@ -53,6 +53,7 @@ export default function App() {
   const [equity, setEquity] = useState(51548)
   const [realized, setRealized] = useState(1548)
   const [orderSide, setOrderSide] = useState<'long'|'short'>('long')
+  const [orderPreview, setOrderPreview] = useState<{ side: 'long' | 'short'; price: number; tp?: number; sl?: number; contracts: number } | null>(null)
   const timerRef = useRef<number | null>(null)
   const rawBarsRef = useRef<Bar[]>(rawBars)
   useEffect(() => { rawBarsRef.current = rawBars }, [rawBars])
@@ -120,6 +121,7 @@ export default function App() {
     const sl = slEnabled ? p - slTicks*0.25 : undefined
     setPosition({ side:'long', qty:contracts, entry:p })
     if(tp||sl) setDrawings(d=>[...d, { id:Math.random().toString(36).slice(2), type:'long', entry:p, tp: tp ?? p+80, sl: sl ?? p-40 } as any])
+    setOrderPreview(null)
   }
   const handleSell=()=>{
     const p = orderType==='Market' ? (currentBar?.close ?? 28991) : limitPrice
@@ -128,7 +130,17 @@ export default function App() {
     const sl = slEnabled ? p + slTicks*0.25 : undefined
     setPosition({ side:'short', qty:contracts, entry:p })
     if(tp||sl) setDrawings(d=>[...d, { id:Math.random().toString(36).slice(2), type:'short', entry:p, tp: tp ?? p-80, sl: sl ?? p+40 } as any])
+    setOrderPreview(null)
   }
+  
+  useEffect(() => {
+    if (currentBar && orderSide) {
+      const p = orderType === 'Market' ? currentBar.close : limitPrice
+      const tp = tpEnabled ? (orderSide === 'long' ? p + tpTicks * 0.25 : p - tpTicks * 0.25) : undefined
+      const sl = slEnabled ? (orderSide === 'long' ? p - slTicks * 0.25 : p + slTicks * 0.25) : undefined
+      setOrderPreview({ side: orderSide, price: p, tp, sl, contracts })
+    }
+  }, [currentBar, orderSide, orderType, limitPrice, tpEnabled, tpTicks, slEnabled, slTicks, contracts])
   const handleClose=()=>{
     if(!position||!currentBar) return
     const pnl = (position.side==='long' ? currentBar.close - position.entry : position.entry - currentBar.close) * position.qty * 2 // $2 per point
@@ -186,7 +198,7 @@ export default function App() {
         <div style={{ flex:1, position:'relative', display:'flex', flexDirection:'column' }}>
           {bars.length===0? <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'#71717a', fontFamily:'monospace', fontSize:12 }}>Loading {selectedDate}...</div> :
           <div style={{ flex:1, position:'relative' }}>
-            <Chart bars={bars} cursor={cursor} replayMode={replayMode} timeframe={timeframe} dateKey={selectedDate} drawings={execVisible ? drawings : []} activeTool={mapTool(activeTool)} onAddDrawing={addDrawing} settings={settings} onHidePanels={()=>setShowPanels(false)} onToggleExec={()=>setExecVisible(v=>!v)} execVisible={execVisible} />
+            <Chart bars={bars} cursor={cursor} replayMode={replayMode} timeframe={timeframe} dateKey={selectedDate} drawings={execVisible ? drawings : []} activeTool={mapTool(activeTool)} onAddDrawing={addDrawing} settings={settings} onHidePanels={()=>setShowPanels(false)} onToggleExec={()=>setExecVisible(v=>!v)} execVisible={execVisible} orderPreview={orderPreview} />
             {settings.watermark && <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', fontSize:120, fontWeight:800, color:'rgba(0,0,0,0.06)', pointerEvents:'none', letterSpacing:-8 }}>{tfLabel}</div>}
             {settings.detachableToolbars && <FavoriteWidget favorites={favorites} activeTool={activeTool} onSelect={id=>setActiveTool(id)} onRemove={toggleFav} />}
             {!showPanels && <button onClick={()=>setShowPanels(true)} style={{ position:'absolute', top:8, right:8, zIndex:20, background:'#0a0a0b', border:'1px solid #27272a', color:'#fff', padding:'6px 10px', borderRadius:8, fontSize:11 }}>Show panels</button>}

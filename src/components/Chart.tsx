@@ -6,10 +6,10 @@ import ContextMenu from './ContextMenu'
 
 type Props = {
   bars: Bar[]
-  cursor: number // index of replay cursor, bars after cursor are future (hidden in replay mode)
+  cursor: number
   replayMode: boolean
   timeframe: number
-  dateKey?: string // increments when user jumps to new date — forces initial 150-bar view like Nami
+  dateKey?: string
   drawings: Drawing[]
   activeTool: string | null
   onAddDrawing: (d: Drawing) => void
@@ -19,9 +19,10 @@ type Props = {
   onToggleExec?: () => void
   execVisible?: boolean
   onPriceClick?: (price: number, time: number) => void
+  orderPreview?: { side: 'long' | 'short'; price: number; tp?: number; sl?: number; contracts: number } | null
 }
 
-export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, drawings, activeTool, onAddDrawing, settings, onResetView, onHidePanels, onToggleExec, execVisible = true }: Props) {
+export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, drawings, activeTool, onAddDrawing, settings, onResetView, onHidePanels, onToggleExec, execVisible = true, orderPreview }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -236,6 +237,7 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
     if (!chartRef.current || !candleRef.current || bars.length === 0) return null
     void overlayKey
     const els: JSX.Element[] = []
+    
     for (const d of drawings) {
       if (d.type === 'rect') {
         const topY = candleRef.current.priceToCoordinate(d.top)
@@ -279,6 +281,37 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
         els.push(<line key={d.id} x1={0} x2="100%" y1={y} y2={y} stroke={d.color} strokeWidth={1} />)
       }
     }
+    
+    if (orderPreview) {
+      const entryY = candleRef.current.priceToCoordinate(orderPreview.price)
+      if (entryY != null) {
+        const color = orderPreview.side === 'long' ? '#10b981' : '#ef4444'
+        els.push(<line key="order-entry" x1={0} x2="100%" y1={entryY} y2={entryY} stroke={color} strokeWidth={2} strokeDasharray="4 2" />)
+        
+        if (orderPreview.tp) {
+          const tpY = candleRef.current.priceToCoordinate(orderPreview.tp)
+          if (tpY != null) {
+            const pnl = Math.abs(orderPreview.tp - orderPreview.price) * orderPreview.contracts * 2
+            els.push(
+              <rect key="order-tp" x={0} y={Math.min(tpY, entryY)} width="100%" height={Math.abs(tpY - entryY)} fill="rgba(16,185,129,0.15)" stroke="#10b981" strokeWidth={1} />,
+              <text key="order-tp-label" x={10} y={tpY - 5} fill="#10b981" fontSize={11} fontFamily="Inter, monospace">TP +${pnl.toFixed(0)}</text>
+            )
+          }
+        }
+        
+        if (orderPreview.sl) {
+          const slY = candleRef.current.priceToCoordinate(orderPreview.sl)
+          if (slY != null) {
+            const pnl = Math.abs(orderPreview.sl - orderPreview.price) * orderPreview.contracts * 2
+            els.push(
+              <rect key="order-sl" x={0} y={Math.min(slY, entryY)} width="100%" height={Math.abs(slY - entryY)} fill="rgba(239,68,68,0.15)" stroke="#ef4444" strokeWidth={1} />,
+              <text key="order-sl-label" x={10} y={slY + 15} fill="#ef4444" fontSize={11} fontFamily="Inter, monospace">SL -${pnl.toFixed(0)}</text>
+            )
+          }
+        }
+      }
+    }
+    
     return els
   })()
 
@@ -344,12 +377,13 @@ export default function Chart({ bars, cursor, replayMode, timeframe, dateKey, dr
   })()
 
   return (
-    <div ref={wrapRef} onClick={handleChartClick} onContextMenu={handleContext} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} style={{ width: '100%', height: '100%', position: 'relative', cursor: activeTool && activeTool !== 'cursor' ? 'crosshair' : 'default' }}>
+    <div ref={wrapRef} onContextMenu={handleContext} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} style={{ width: '100%', height: '100%', position: 'relative', cursor: activeTool && activeTool !== 'cursor' ? 'crosshair' : 'default' }}>
       <svg ref={svgRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} width="100%" height="100%">
         {overlay}
         {pendingDrawing}
       </svg>
-      {pending && <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(41,98,255,0.15)', border: '1px solid #2962ff', color: '#2962ff', fontSize: 11, padding: '4px 8px', borderRadius: 6, pointerEvents: 'none', whiteSpace:'nowrap' }}>Click to set {pending.type === 'rect' ? 'bottom' : 'second point'}</div>}
+      <div onClick={handleChartClick} style={{ position: 'absolute', inset: 0, zIndex: 10 }} />
+      {pending && <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(41,98,255,0.15)', border: '1px solid #2962ff', color: '#2962ff', fontSize: 11, padding: '4px 8px', borderRadius: 6, pointerEvents: 'none', whiteSpace:'nowrap', zIndex: 20 }}>Click to set {pending.type === 'rect' ? 'bottom' : 'second point'}</div>}
       {menu && (
         <ContextMenu
           x={menu.x} y={menu.y} price={menu.price}

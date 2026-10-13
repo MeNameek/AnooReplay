@@ -7,3 +7,11 @@ export type Drawing =
   | { id: string; type: 'fib'; p1: { time: number; price: number }; p2: { time: number; price: number } }
   | { id: string; type: 'long'; entry: number; sl: number; tp: number }
   | { id: string; type: 'short'; entry: number; sl: number; tp: number }
+
+export type OrderPreview = {
+  side: 'long' | 'short'
+  price: number
+  tp?: number
+  sl?: number
+  contracts: number
+}
