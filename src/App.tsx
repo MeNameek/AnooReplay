@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { Settings, BookOpen, ChevronLeft, ChevronRight, Play, Pause, Layout, Calendar } from 'lucide-react'
 import Chart from './components/Chart'
 import LeftToolbar from './components/LeftToolbar'
 import FavoriteWidget from './components/FavoriteWidget'
@@ -151,27 +152,31 @@ export default function App() {
   }
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background: '#0a0a0b' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background: 'linear-gradient(135deg, #0a0a0b 0%, #111113 100%)', fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}>
       <QuickSwitch onSwitch={setTimeframe} />
-      <div style={{ height:36, display:'flex', alignItems:'center', gap:6, padding:'0 8px', borderBottom:'1px solid #1a1a1e', background:'#0a0a0b', overflowX:'auto' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:700 }}>
-          <span style={{ background:'#1a1a1e', padding:'2px 6px', borderRadius:6, fontFamily:'monospace', color:'#fff', fontSize:11, display:'flex', alignItems:'center', gap:4 }}>∼ MNQ1! <span style={{ background:'#27272a', padding:'0 4px', borderRadius:4, fontSize:9 }}>/</span></span>
-          <button style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', width:22, height:22, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+      <div style={{ height:44, display:'flex', alignItems:'center', gap:8, padding:'0 12px', borderBottom:'1px solid rgba(39, 39, 42, 0.5)', background:'rgba(10, 10, 11, 0.95)', backdropFilter:'blur(20px)', overflowX:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, fontWeight:700 }}>
+          <span style={{ background:'rgba(26, 26, 30, 0.8)', padding:'4px 10px', borderRadius:8, fontFamily:'Inter, monospace', color:'#fff', fontSize:12, display:'flex', alignItems:'center', gap:6, border:'1px solid rgba(63, 63, 70, 0.5)', backdropFilter:'blur(10px)' }}>∼ MNQ1! <span style={{ background:'rgba(63, 63, 70, 0.5)', padding:'0 6px', borderRadius:4, fontSize:10 }}>/</span></span>
+          <button style={{ background:'rgba(26, 26, 30, 0.8)', border:'1px solid rgba(63, 63, 70, 0.5)', color:'#a1a1aa', width:26, height:26, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', backdropFilter:'blur(10px)' }}>+</button>
         </div>
-        <div style={{ width:1, height:16, background:'#1a1a1e' }} />
+        <div style={{ width:1, height:16, background:'rgba(39, 39, 42, 0.5)' }} />
         <TimeframePicker seconds={timeframe} onSelect={setTimeframe} />
-        <button onClick={()=> alert('Indicators — TradingView indicators coming soon (SMA/EMA/VWAP placeholder)')} style={{ display:'flex', alignItems:'center', gap:4, background:'#1a1a1e', border:'1px solid #27272a', color:'#a1a1aa', padding:'3px 8px', borderRadius:6, fontSize:11 }}>
-          <span>◍</span> Indicators <span style={{ opacity:0.5 }}>▾</span>
+        <button onClick={()=> alert('Indicators — Coming soon: SMA, EMA, VWAP, Volume Profile')} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(26, 26, 30, 0.8)', border:'1px solid rgba(63, 63, 70, 0.5)', color:'#e5e7eb', padding:'6px 12px', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer', backdropFilter:'blur(10px)' }}>
+          <Layout size={14} />
+          Indicators
         </button>
         <GoToDropdown rawBars={rawBars} cursor={cursor} setCursor={setCursor} />
-        <span style={{ display:'flex', gap:2 }}><button onClick={()=>jumpDays(-1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'3px 6px', borderRadius:6 }}>←</button><button onClick={()=>jumpDays(1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'3px 6px', borderRadius:6 }}>→</button></span>
-        <input type="date" value={selectedDate} onChange={e=>goToDate(e.target.value)} min={availableDates[0]} max={availableDates[availableDates.length-1]} style={{ marginLeft:6, background:'#1a1a1e', border:'1px solid #27272a', color:'#e5e5e5', borderRadius:6, padding:'3px 6px', fontSize:11, height:22 }} />
+        <span style={{ display:'flex', gap:2 }}><button onClick={()=>jumpDays(-1)} style={{ background:'rgba(26, 26, 30, 0.8)', border:'1px solid rgba(63, 63, 70, 0.5)', color:'#a1a1aa', padding:'6px 10px', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ChevronLeft size={14} /></button><button onClick={()=>jumpDays(1)} style={{ background:'rgba(26, 26, 30, 0.8)', border:'1px solid rgba(63, 63, 70, 0.5)', color:'#a1a1aa', padding:'6px 10px', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ChevronRight size={14} /></button></span>
+        <div style={{ position: 'relative' }}>
+          <input type="date" value={selectedDate} onChange={e=>goToDate(e.target.value)} min={availableDates[0]} max={availableDates[availableDates.length-1]} style={{ marginLeft:6, background:'rgba(26, 26, 30, 0.8)', border:'1px solid rgba(63, 63, 70, 0.5)', color:'#e5e5e5', borderRadius:8, padding:'6px 12px', fontSize:11, height:26, outline:'none', fontFamily:'Inter, system-ui', backdropFilter:'blur(10px)', cursor:'pointer', paddingLeft: 32 }} />
+          <Calendar size={14} style={{ position: 'absolute', left: 14, top: 6, color: '#71717a', pointerEvents: 'none' }} />
+        </div>
         <div style={{ flex:1 }} />
-        <div style={{ display:'flex', gap:4, alignItems:'center' }}>
-          <button onClick={()=>setShowSettings(true)} title="Settings" style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 8px', borderRadius:6 }}>⚙</button>
-          {currentBar && <div style={{ fontFamily:'monospace', fontSize:11, color:'#fff', background:'#1a1a1e', padding:'3px 6px', borderRadius:6 }}>{currentBar.close.toFixed(2)} <span style={{ color: currentBar.close>=currentBar.open?'#26a69a':'#ef5350' }}>{currentBar.close>=currentBar.open?'+0.11%':'-0.11%'}</span></div>}
-          <label style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6 }}><input type="checkbox" checked={replayMode} onChange={e=>setReplayMode(e.target.checked)} /> Replay</label>
-          <button style={{ background:'#fff', color:'#000', padding:'4px 10px', borderRadius:6, border:'none', fontSize:11, fontWeight:700 }}>Journal</button>
+        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+          <button onClick={()=>setShowSettings(true)} title="Settings" style={{ background:'rgba(26, 26, 30, 0.8)', border:'1px solid rgba(63, 63, 70, 0.5)', color:'#a1a1aa', padding:'6px 10px', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(10px)' }}><Settings size={14} /></button>
+          {currentBar && <div style={{ fontFamily:'Inter, monospace', fontSize:12, color:'#fff', background:'rgba(26, 26, 30, 0.8)', padding:'6px 12px', borderRadius:8, border:'1px solid rgba(63, 63, 70, 0.5)', fontWeight:600, backdropFilter:'blur(10px)' }}>{currentBar.close.toFixed(2)} <span style={{ color: currentBar.close>=currentBar.open?'#10b981':'#ef5350', marginLeft: 4 }}>{currentBar.close>=currentBar.open?'+0.11%':'-0.11%'}</span></div>}
+          <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, color:'#a1a1aa', background:'rgba(26, 26, 30, 0.8)', padding:'6px 12px', borderRadius:8, border:'1px solid rgba(63, 63, 70, 0.5)', backdropFilter:'blur(10px)', cursor:'pointer' }}><input type="checkbox" checked={replayMode} onChange={e=>setReplayMode(e.target.checked)} style={{ cursor: 'pointer' }} /> Replay</label>
+          <button style={{ background:'rgba(255, 255, 255, 0.95)', color:'#000', padding:'6px 14px', borderRadius:8, border:'none', fontSize:11, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6, backdropFilter:'blur(10px)' }}><BookOpen size={14} />Journal</button>
         </div>
       </div>
 
@@ -187,32 +192,24 @@ export default function App() {
             {!showPanels && <button onClick={()=>setShowPanels(true)} style={{ position:'absolute', top:8, right:8, zIndex:20, background:'#0a0a0b', border:'1px solid #27272a', color:'#fff', padding:'6px 10px', borderRadius:8, fontSize:11 }}>Show panels</button>}
           </div>}
 
-          <div style={{ height:36, display:'flex', alignItems:'center', gap:6, padding:'0 8px', borderTop:'1px solid #1a1a1e', background:'#0a0a0b', fontSize:11, position:'relative' }}>
-            {/* bottom pills like Image 1: 30s 1m 3m... */}
-            <div style={{ display:'flex', gap:2, background:'#1a1a1e', padding:2, borderRadius:8 }}>
+          <div style={{ height:48, display:'flex', alignItems:'center', gap:8, padding:'0 12px', borderTop:'1px solid rgba(39, 39, 42, 0.5)', background:'rgba(10, 10, 11, 0.95)', fontSize:11, position:'relative', backdropFilter:'blur(20px)' }}>
+            <div style={{ display:'flex', gap:2, background:'rgba(26, 26, 30, 0.6)', padding:4, borderRadius:10, border: '1px solid rgba(63, 63, 70, 0.3)' }}>
               {[
                 { l:'30s', s:30 }, { l:'1m', s:60 }, { l:'3m', s:180 }, { l:'5m', s:300 }, { l:'15m', s:900 }, { l:'30m', s:1800 }, { l:'1H', s:3600 }, { l:'4H', s:14400 }, { l:'1D', s:86400 },
-              ].map(o=> <button key={o.s} onClick={()=>setTimeframe(o.s)} style={{ padding:'4px 6px', borderRadius:6, fontSize:11, fontFamily:'monospace', background: timeframe===o.s ? '#fff' : 'transparent', color: timeframe===o.s ? '#000' : '#a1a1aa', border:'none', fontWeight: timeframe===o.s?700:400 }}>{o.l}</button>)}
-              <button style={{ padding:'3px 6px', borderRadius:6, background:'transparent', border:'none', color:'#71717a' }}>▦</button>
+              ].map(o=> <button key={o.s} onClick={()=>setTimeframe(o.s)} style={{ padding:'6px 10px', borderRadius:8, fontSize:11, fontFamily:'Inter, monospace', background: timeframe===o.s ? 'rgba(255, 255, 255, 0.95)' : 'transparent', color: timeframe===o.s ? '#000' : '#a1a1aa', border:'none', fontWeight: timeframe===o.s?700:500, cursor:'pointer', transition: 'all 0.15s' }}>{o.l}</button>)}
             </div>
-            <button style={{ marginLeft:6, background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 6px', borderRadius:6, fontSize:11 }}>📅</button>
-            <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
-              <button onClick={()=>step(-1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 8px', borderRadius:6 }}>◀</button>
-              <button onClick={()=>setIsPlaying(v=>!v)} style={{ background:isPlaying?'#fff':'#1a1a1e', border:'none', color:isPlaying?'#000':'#a1a1aa', padding:'4px 10px', borderRadius:6 }}>{isPlaying?'⏸':'▶'}</button>
-              <button onClick={()=>step(1)} style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 8px', borderRadius:6 }}>▶</button>
-              <span style={{ color:'#71717a', margin:'0 6px' }}>≫</span>
-              <div style={{ display:'flex', gap:2, alignItems:'center' }}>{SPEED_OPTIONS.slice(0,4).map(s=> <button key={s} onClick={()=>setSpeed(s)} style={{ padding:'2px 6px', borderRadius:6, border:'none', background: speed===s?'#fff':'#1a1a1e', color: speed===s?'#000':'#a1a1aa', fontFamily:'monospace', fontSize:11 }}>{s}x</button>)}<span style={{ background:'#1a1a1e', color:'#a1a1aa', padding:'2px 6px', borderRadius:6, fontFamily:'monospace' }}>{speed}x ▾</span></div>
-              <div style={{ display:'flex', alignItems:'center', gap:2, marginLeft:8, background:'#1a1a1e', padding:'2px 6px', borderRadius:6 }}>
-                <span style={{ color:'#fff', fontSize:11 }}>{tfLabel} ▾</span>
-              </div>
+            <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+              <button onClick={()=>step(-1)} style={{ background:'rgba(26, 26, 30, 0.8)', border:'1px solid rgba(63, 63, 70, 0.5)', color:'#a1a1aa', padding:'6px 10px', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(10px)' }}><ChevronLeft size={14} /></button>
+              <button onClick={()=>setIsPlaying(v=>!v)} style={{ background:isPlaying?'rgba(255, 255, 255, 0.95)':'rgba(26, 26, 30, 0.8)', border:isPlaying?'none':'1px solid rgba(63, 63, 70, 0.5)', color:isPlaying?'#000':'#a1a1aa', padding:'6px 14px', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(10px)' }}>{isPlaying?<Pause size={14} />:<Play size={14} />}</button>
+              <button onClick={()=>step(1)} style={{ background:'rgba(26, 26, 30, 0.8)', border:'1px solid rgba(63, 63, 70, 0.5)', color:'#a1a1aa', padding:'6px 10px', borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(10px)' }}><ChevronRight size={14} /></button>
+              <div style={{ display:'flex', gap:4, alignItems:'center', marginLeft:8 }}>{SPEED_OPTIONS.slice(0,4).map(s=> <button key={s} onClick={()=>setSpeed(s)} style={{ padding:'4px 10px', borderRadius:8, border:'none', background: speed===s?'rgba(255, 255, 255, 0.95)':'rgba(26, 26, 30, 0.8)', color: speed===s?'#000':'#a1a1aa', fontFamily:'monospace', fontSize:11, fontWeight:600, cursor:'pointer', backdropFilter:'blur(10px)' }}>{s}x</button>)}</div>
             </div>
             <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-              <button onClick={()=>setBottomOpen(v=>!v)} style={{ background: bottomOpen?'#fff':'#1a1a1e', border:'none', color: bottomOpen?'#000':'#a1a1aa', padding:'4px 8px', borderRadius:6, fontSize:11 }}>{bottomOpen?'▼':'▲'} {bottomOpen?'Hide':'Show'} panel</button>
-              <button style={{ background:'#1a1a1e', border:'none', color:'#a1a1aa', padding:'4px 8px', borderRadius:6, fontSize:11 }}>♡ Bookmarks</button>
-              <span style={{ fontFamily:'monospace', color:'#a1a1aa', background:'#1a1a1e', padding:'3px 6px', borderRadius:6, fontSize:11 }}>{currentBar? new Date(currentBar.time*1000).toLocaleString('en-US',{ month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'America/New_York'})+' ET':''} — 09:42</span>
+              <button onClick={()=>setBottomOpen(v=>!v)} style={{ background: bottomOpen?'rgba(255, 255, 255, 0.95)':'rgba(26, 26, 30, 0.8)', border: '1px solid rgba(63, 63, 70, 0.5)', color: bottomOpen?'#000':'#a1a1aa', padding:'6px 12px', borderRadius:8, fontSize:11, fontWeight: 600, cursor:'pointer', backdropFilter: 'blur(10px)' }}>{bottomOpen?'Hide':'Show'} Panel</button>
+              <span style={{ fontFamily:'Inter, monospace', color:'#e5e7eb', background:'rgba(26, 26, 30, 0.8)', padding:'6px 12px', borderRadius:8, fontSize:11, border: '1px solid rgba(63, 63, 70, 0.5)', backdropFilter: 'blur(10px)' }}>{currentBar? (() => { const d = new Date(currentBar.time*1000); const nyOffset = -4; const nyTime = new Date(d.getTime() + nyOffset * 3600000); return nyTime.toLocaleString('en-US',{ month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) + ' ET (UTC-4)'; })() : ''}</span>
             </div>
           </div>
-          <BottomPanel open={bottomOpen} height={bottomHeight} setHeight={setBottomHeight} setOpen={setBottomOpen} />
+          <BottomPanel open={bottomOpen} height={bottomHeight} setHeight={setBottomHeight} setOpen={setBottomOpen} equity={equity} realized={realized} />
         </div>
 
         {showPanels && <RightPanel price={currentBar?.close} contracts={contracts} setContracts={setContracts} orderType={orderType} setOrderType={setOrderType} limitPrice={limitPrice} setLimitPrice={setLimitPrice} tpEnabled={tpEnabled} setTpEnabled={setTpEnabled} tpTicks={tpTicks} setTpTicks={setTpTicks} slEnabled={slEnabled} setSlEnabled={setSlEnabled} slTicks={slTicks} setSlTicks={setSlTicks} riskPct={riskPct} setRiskPct={setRiskPct} position={position} orders={orders} onBuy={handleBuy} onSell={handleSell} onClose={handleClose} equity={equity} realized={realized} orderSide={orderSide} setOrderSide={setOrderSide} />}
